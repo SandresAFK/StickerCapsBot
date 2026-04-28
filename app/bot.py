@@ -103,6 +103,18 @@ def _display_name(obj: Message | CallbackQuery) -> str:
     return u.full_name or f"Игрок #{u.id}"
 
 
+async def _display_name_by_id(bot: Bot, user_id: int) -> str:
+    try:
+        chat = await bot.get_chat(user_id)
+        if getattr(chat, "username", None):
+            return f"@{chat.username}"
+        if getattr(chat, "full_name", None):
+            return str(chat.full_name)
+    except Exception:
+        pass
+    return f"Игрок #{user_id}"
+
+
 def _inv_to_render(paths: Dict[str, str], inv_items: List[Tuple[str, int]]) -> List[RenderSticker]:
     out: List[RenderSticker] = []
     for file_id, cnt in inv_items:
@@ -370,7 +382,8 @@ async def _send_profile_to_user(user_id: int, *, bot: Bot, db: Database, cache: 
             pass
     avatar = await avatars.get_avatar_path(bot, user_id)
     out = os.path.join(os.getcwd(), "data", "renders", f"profile_{user_id}.png")
-    render_profile(user_title=str(user_id), avatar_path=avatar, stickers=_inv_to_render(paths, inv_items), out_path=out)
+    user_title = await _display_name_by_id(bot, user_id)
+    render_profile(user_title=user_title, avatar_path=avatar, stickers=_inv_to_render(paths, inv_items), out_path=out)
     markup = kb_start(no_chips=(len(inv_items) == 0)) if len(inv_items) == 0 else kb_profile_actions(user.energy)
     await bot.send_photo(chat_id=user_id, photo=FSInputFile(out), caption=caption, reply_markup=markup)
 
@@ -543,7 +556,7 @@ async def _show_duel_offer(message: Message, *, duel_id: str, db: Database, bot:
 async def cb_setup(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(SetupChips.waiting_stickers)
     await state.update_data(stickers=[])
-    await cb.message.answer("Отправь 3 любимых стикера и нажми «Готово».", reply_markup=kb_setup_confirm(can_confirm=False))
+    await cb.message.answer("Отправь 3 любых стикера и нажми «Готово».")
     await cb.answer()
 
 
@@ -565,7 +578,10 @@ async def on_setup_collect(message: Message, state: FSMContext) -> None:
     stickers.append(_static_sticker_id(message.sticker))
     stickers = stickers[:3]
     await state.update_data(stickers=stickers)
-    await message.answer(f"Принято: {len(stickers)}/3", reply_markup=kb_setup_confirm(can_confirm=(len(stickers) == 3)))
+    if len(stickers) < 3:
+        await message.answer(f"Принято: {len(stickers)}/3")
+        return
+    await message.answer("Принято: 3/3. Нажми «Готово».", reply_markup=kb_setup_confirm(can_confirm=True))
 
 
 @router.callback_query(F.data == "setup_done_disabled")
