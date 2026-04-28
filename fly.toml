@@ -11,6 +11,9 @@ primary_region = 'sin'
 [processes]
   app = "python -m app"
 
+[restart]
+  policy = "always"
+
 [[vm]]
   memory = '1gb'
   cpus = 1
