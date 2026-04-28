@@ -139,7 +139,7 @@ async def _render_and_send_profile(message_or_cb: Message | CallbackQuery, *, bo
     empty_lines: list[str] | None = None
     if len(inv_items) == 0:
         if int(user.setup_done) == 0:
-            empty_lines = ["Фишек нет. Нажмите «Настроить фишки», чтобы получить фишки."]
+            empty_lines = ["Фишек нет. Нажмите «Настроить фишки». "]
         else:
             left = seconds_until_next_utc_midnight()
             empty_lines = [
@@ -324,7 +324,7 @@ async def cb_duel_decline(cb: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("duel_accept:"))
-async def cb_duel_accept(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache) -> None:
+async def cb_duel_accept(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
     await _loading(cb)
     duel_id = cb.data.split(":", 1)[1]
     duel = await db.get_duel(duel_id)
@@ -334,12 +334,19 @@ async def cb_duel_accept(cb: CallbackQuery, state: FSMContext, db: Database, bot
     if int(duel.get("creator_id") or 0) == int(cb.from_user.id):
         await cb.answer("Нельзя принять свой вызов.", show_alert=False)
         return
+    inv = await db.get_inventory(cb.from_user.id)
+    if not inv:
+        await state.clear()
+        await cb.message.answer("Сначала настрой фишки.")
+        await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id, edit_in_place=False)
+        await cb.answer()
+        return
+
     ok = await db.accept_duel(duel_id, cb.from_user.id)
     if not ok:
         await cb.answer("Этот вызов уже принят.", show_alert=False)
         return
 
-    inv = await db.get_inventory(cb.from_user.id)
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
     await state.set_state(DuelAccept.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], duel_id=duel_id, target_energy=int(duel.get("target_energy") or 0))
