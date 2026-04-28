@@ -32,7 +32,6 @@ def kb_profile_actions(energy: int) -> InlineKeyboardMarkup:
         b.button(text="Ежедневная энергия: ⚡️ 0/3", callback_data="e")
     b.button(text="Коллекция", callback_data="collection")
     b.button(text="Схватка с другом", callback_data="pvp")
-    b.button(text="Сбросить фишки", callback_data="reset")
     b.adjust(1)
     return b.as_markup()
 
