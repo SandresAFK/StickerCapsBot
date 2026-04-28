@@ -1,0 +1,17 @@
+# fly.toml app configuration file generated for stickercapsbot on 2026-04-28T14:48:27+07:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'stickercapsbot'
+primary_region = 'sin'
+
+[build]
+
+[processes]
+  app = "python -m app"
+
+[[vm]]
+  memory = '1gb'
+  cpus = 1
+  memory_mb = 1024
