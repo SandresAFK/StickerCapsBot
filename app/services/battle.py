@@ -45,17 +45,17 @@ def run_battle(player_units: List[BattleUnit], enemy_units: List[BattleUnit]) ->
 
 
 def _winner_pct(diff: int) -> float:
-    """Доля энергии победителя в зависимости от разницы слот-машин."""
-    if diff < 10:
+    """Доля энергии победителя в зависимости от разницы бросков боулинга (0-5)."""
+    if diff == 0:
         return 0.50
-    elif diff < 20:
+    elif diff == 1:
         return 0.60
-    elif diff < 30:
-        return 0.75
-    elif diff < 40:
+    elif diff == 2:
+        return 0.70
+    elif diff == 3:
         return 0.80
-    elif diff < 50:
-        return 0.85
+    elif diff == 4:
+        return 0.90
     else:
         return 1.00
 

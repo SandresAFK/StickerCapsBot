@@ -427,10 +427,10 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     creator_units: list[BattleUnit] = [BattleUnit(file_id=fid, nominal=int(inv_creator.get(fid, 1))) for fid in creator_pick if fid in inv_creator]
     opponent_units: list[BattleUnit] = [BattleUnit(file_id=fid, nominal=int(inv_op.get(fid, 1))) for fid in opponent_pick]
 
-    # ── 🎰 Слот-машина определяет победителя ──────────────────────────────────
+    # ── � Боулинг определяет победителя ─────────────────────────────────────
     creator_dice_msg, opponent_dice_msg = await asyncio.gather(
-        bot.send_dice(chat_id=creator_id, emoji="🎰"),
-        bot.send_dice(chat_id=cb.from_user.id, emoji="🎰"),
+        bot.send_dice(chat_id=creator_id, emoji="�"),
+        bot.send_dice(chat_id=cb.from_user.id, emoji="�"),
     )
     creator_slot = creator_dice_msg.dice.value
     opponent_slot = opponent_dice_msg.dice.value
@@ -495,7 +495,7 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     out_op = os.path.join(os.getcwd(), "data", "renders", f"duel_result_{creator_id}_{cb.from_user.id}_{ts}_o.png")
 
     render_duel_result(
-        title=f"🎰 {creator_slot} vs {opponent_slot}",
+        title=f"� {creator_slot} vs {opponent_slot}",
         user_title=f"{creator_name} vs {opponent_name}",
         avatar_path=None,
         attacker_label=f"Нападающий (ты, {creator_name}):",
@@ -507,7 +507,7 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
         out_path=out_creator,
     )
     render_duel_result(
-        title=f"🎰 {creator_slot} vs {opponent_slot}",
+        title=f"� {creator_slot} vs {opponent_slot}",
         user_title=f"{creator_name} vs {opponent_name}",
         avatar_path=None,
         attacker_label=f"Нападающий ({creator_name}):",
