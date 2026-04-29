@@ -66,25 +66,28 @@ def distribute_by_slot(
     player_slot: int,
     enemy_slot: int,
 ) -> BattleResult:
-    """Распределяет фишки пропорционально разнице значений слот-машины."""
+    """Распределяет фишки: победитель получает свою долю, округление в его пользу."""
     diff = abs(player_slot - enemy_slot)
     w_pct = _winner_pct(diff)
-    player_pct = w_pct if player_slot >= enemy_slot else (1.0 - w_pct)
+    player_wins = player_slot >= enemy_slot
 
     all_units: List[BattleUnit] = list(player_units) + list(enemy_units)
     random.shuffle(all_units)
     total_energy = sum(u.nominal for u in all_units)
-    player_quota = total_energy * player_pct
+    winner_quota = total_energy * w_pct
 
-    player_won: List[BattleUnit] = []
-    enemy_won: List[BattleUnit] = []
-    player_energy = 0.0
+    winner_won: List[BattleUnit] = []
+    loser_won: List[BattleUnit] = []
+    winner_energy = 0.0
     for u in all_units:
-        if player_energy < player_quota:
-            player_won.append(u)
-            player_energy += u.nominal
+        if winner_energy < winner_quota:
+            winner_won.append(u)
+            winner_energy += u.nominal
         else:
-            enemy_won.append(u)
+            loser_won.append(u)
 
-    return BattleResult(player_won=player_won, enemy_won=enemy_won)
+    if player_wins:
+        return BattleResult(player_won=winner_won, enemy_won=loser_won)
+    else:
+        return BattleResult(player_won=loser_won, enemy_won=winner_won)
 
