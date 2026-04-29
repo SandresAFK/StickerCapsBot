@@ -43,3 +43,48 @@ def run_battle(player_units: List[BattleUnit], enemy_units: List[BattleUnit]) ->
 
     return BattleResult(player_won=player_won, enemy_won=enemy_won)
 
+
+def _winner_pct(diff: int) -> float:
+    """Доля энергии победителя в зависимости от разницы слот-машин."""
+    if diff < 10:
+        return 0.50
+    elif diff < 20:
+        return 0.60
+    elif diff < 30:
+        return 0.75
+    elif diff < 40:
+        return 0.80
+    elif diff < 50:
+        return 0.85
+    else:
+        return 1.00
+
+
+def distribute_by_slot(
+    player_units: List[BattleUnit],
+    enemy_units: List[BattleUnit],
+    player_slot: int,
+    enemy_slot: int,
+) -> BattleResult:
+    """Распределяет фишки пропорционально разнице значений слот-машины."""
+    diff = abs(player_slot - enemy_slot)
+    w_pct = _winner_pct(diff)
+    player_pct = w_pct if player_slot >= enemy_slot else (1.0 - w_pct)
+
+    all_units: List[BattleUnit] = list(player_units) + list(enemy_units)
+    random.shuffle(all_units)
+    total_energy = sum(u.nominal for u in all_units)
+    player_quota = total_energy * player_pct
+
+    player_won: List[BattleUnit] = []
+    enemy_won: List[BattleUnit] = []
+    player_energy = 0.0
+    for u in all_units:
+        if player_energy < player_quota:
+            player_won.append(u)
+            player_energy += u.nominal
+        else:
+            enemy_won.append(u)
+
+    return BattleResult(player_won=player_won, enemy_won=enemy_won)
+

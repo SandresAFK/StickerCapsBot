@@ -18,7 +18,7 @@ from app.keyboards import kb_battle_pick, kb_duel_accept_pick, kb_duel_offer, kb
 from app.middleware import DI
 from app.render.profile import RenderSticker, render_battle_result, render_duel_result, render_profile
 from app.services.avatars import AvatarCache
-from app.services.battle import BattleUnit, counts_from_list, run_battle
+from app.services.battle import BattleUnit, counts_from_list, distribute_by_slot, run_battle
 from app.services.energy import MAX_ENERGY, get_user_with_regen, seconds_until_next_utc_midnight, utc_midnight_ts
 from app.services.stickers import StickerCache, pick_enemy_stickers
 from app.states import BattlePick, DuelAccept, DuelCreate, EnergySpend, SetupChips
@@ -428,10 +428,6 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     opponent_units: list[BattleUnit] = [BattleUnit(file_id=fid, nominal=int(inv_op.get(fid, 1))) for fid in opponent_pick]
 
     # ── 🎰 Слот-машина определяет победителя ──────────────────────────────────
-    await asyncio.gather(
-        bot.send_message(creator_id, "🎰 Судьба решает..."),
-        bot.send_message(cb.from_user.id, "🎰 Судьба решает..."),
-    )
     creator_dice_msg, opponent_dice_msg = await asyncio.gather(
         bot.send_dice(chat_id=creator_id, emoji="🎰"),
         bot.send_dice(chat_id=cb.from_user.id, emoji="🎰"),
@@ -440,41 +436,25 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     opponent_slot = opponent_dice_msg.dice.value
     await asyncio.sleep(4)  # ждём завершения анимации слот-машины
 
+    result = distribute_by_slot(creator_units, opponent_units, creator_slot, opponent_slot)
+
+    creator_ids = set(u.file_id for u in creator_units)
+    opponent_ids = set(u.file_id for u in opponent_units)
+    creator_gained_units = [u for u in result.player_won if u.file_id in opponent_ids]
+    opponent_gained_units = [u for u in result.enemy_won if u.file_id in creator_ids]
+    creator_delta = sum(int(u.nominal) for u in result.player_won) - sum(int(u.nominal) for u in creator_units)
+    opponent_delta = sum(int(u.nominal) for u in result.enemy_won) - sum(int(u.nominal) for u in opponent_units)
+
     stake_creator = set(u.file_id for u in creator_units)
     stake_op = set(u.file_id for u in opponent_units)
 
-    if creator_slot > opponent_slot:
-        # Нападающий победил — забирает все фишки соперника
-        creator_gained_units = opponent_units
-        opponent_gained_units: list[BattleUnit] = []
-        creator_delta = sum(int(u.nominal) for u in opponent_units)
-        opponent_delta = -sum(int(u.nominal) for u in opponent_units)
-        new_inv_creator: Dict[str, int] = {k: int(v) for k, v in inv_creator.items() if k not in stake_creator}
-        for u in creator_units + opponent_units:
-            new_inv_creator[u.file_id] = max(int(new_inv_creator.get(u.file_id, 0)), int(u.nominal))
-        new_inv_op: Dict[str, int] = {k: int(v) for k, v in inv_op.items() if k not in stake_op}
-    elif opponent_slot > creator_slot:
-        # Обороняющийся победил — забирает все фишки нападающего
-        creator_gained_units = []
-        opponent_gained_units = creator_units
-        creator_delta = -sum(int(u.nominal) for u in creator_units)
-        opponent_delta = sum(int(u.nominal) for u in creator_units)
-        new_inv_creator = {k: int(v) for k, v in inv_creator.items() if k not in stake_creator}
-        new_inv_op = {k: int(v) for k, v in inv_op.items() if k not in stake_op}
-        for u in creator_units + opponent_units:
-            new_inv_op[u.file_id] = max(int(new_inv_op.get(u.file_id, 0)), int(u.nominal))
-    else:
-        # Ничья — каждый получает свои фишки обратно
-        creator_gained_units = []
-        opponent_gained_units = []
-        creator_delta = 0
-        opponent_delta = 0
-        new_inv_creator = {k: int(v) for k, v in inv_creator.items() if k not in stake_creator}
-        for u in creator_units:
-            new_inv_creator[u.file_id] = max(int(new_inv_creator.get(u.file_id, 0)), int(u.nominal))
-        new_inv_op = {k: int(v) for k, v in inv_op.items() if k not in stake_op}
-        for u in opponent_units:
-            new_inv_op[u.file_id] = max(int(new_inv_op.get(u.file_id, 0)), int(u.nominal))
+    new_inv_creator: Dict[str, int] = {k: int(v) for k, v in inv_creator.items() if k not in stake_creator}
+    for u in result.player_won:
+        new_inv_creator[u.file_id] = max(int(new_inv_creator.get(u.file_id, 0)), int(u.nominal))
+
+    new_inv_op: Dict[str, int] = {k: int(v) for k, v in inv_op.items() if k not in stake_op}
+    for u in result.enemy_won:
+        new_inv_op[u.file_id] = max(int(new_inv_op.get(u.file_id, 0)), int(u.nominal))
 
     await db.set_inventory_exact(creator_id, new_inv_creator)
     await db.set_inventory_exact(cb.from_user.id, new_inv_op)
@@ -514,9 +494,8 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     out_creator = os.path.join(os.getcwd(), "data", "renders", f"duel_result_{creator_id}_{cb.from_user.id}_{ts}_c.png")
     out_op = os.path.join(os.getcwd(), "data", "renders", f"duel_result_{creator_id}_{cb.from_user.id}_{ts}_o.png")
 
-    slot_tie_txt = " — Ничья!" if creator_slot == opponent_slot else ""
     render_duel_result(
-        title=f"🎰 {creator_slot} vs {opponent_slot}{slot_tie_txt}",
+        title="Итог дуэли",
         user_title=f"{creator_name} vs {opponent_name}",
         avatar_path=None,
         attacker_label=f"Нападающий (ты, {creator_name}):",
@@ -528,7 +507,7 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
         out_path=out_creator,
     )
     render_duel_result(
-        title=f"🎰 {creator_slot} vs {opponent_slot}{slot_tie_txt}",
+        title="Итог дуэли",
         user_title=f"{creator_name} vs {opponent_name}",
         avatar_path=None,
         attacker_label=f"Нападающий ({creator_name}):",
