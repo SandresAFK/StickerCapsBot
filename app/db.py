@@ -273,6 +273,7 @@ class Database:
                 """
                 SELECT u.user_id, u.energy, u.setup_done, u.created_at,
                        COUNT(DISTINCT i.sticker_file_id) as chips_count,
+                       COALESCE(SUM(i.count), 0) as total_nominal,
                        (SELECT COUNT(*) FROM duels d WHERE d.status='done' AND (d.creator_id=u.user_id OR d.opponent_id=u.user_id)) as duels_count
                 FROM users u
                 LEFT JOIN inventory i ON i.user_id = u.user_id

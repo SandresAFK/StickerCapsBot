@@ -918,7 +918,7 @@ async def cb_reset_ok(cb: CallbackQuery, state: FSMContext, db: Database, bot: B
 
 
 @router.message(Command("stats"))
-async def cmd_stats(message: Message, db: Database, cfg: Config) -> None:
+async def cmd_stats(message: Message, db: Database, cfg: Config, bot: Bot) -> None:
     if cfg.admin_id is None or message.from_user.id != cfg.admin_id:
         return
     stats = await db.get_all_users_stats()
@@ -926,15 +926,17 @@ async def cmd_stats(message: Message, db: Database, cfg: Config) -> None:
         await message.answer("Нет игроков.")
         return
     total_duels = sum(s["duels_count"] for s in stats)
-    lines = [f"📊 Игроков: {len(stats)}  |  Дуэлей: {total_duels}\n"]
+    total_nominal = sum(s["total_nominal"] for s in stats)
+    lines = [f"📊 Игроков: {len(stats)}  |  Дуэлей: {total_duels}  |  Очков всего: {total_nominal}\n"]
     for s in stats:
         setup = "✅" if s["setup_done"] else "⏳"
+        name = await _display_name_by_id(bot, s["user_id"])
         lines.append(
-            f"<code>{s['user_id']}</code> | 🃏{s['chips_count']} | ⚡{s['energy']} | ⚔️{s['duels_count']} | {setup}"
+            f"{name} | 🃏{s['chips_count']} ({s['total_nominal']}⚡) | ⚡{s['energy']} | ⚔️{s['duels_count']} | {setup}"
         )
     text = "\n".join(lines)
     for i in range(0, len(text), 4096):
-        await message.answer(text[i : i + 4096], parse_mode="HTML")
+        await message.answer(text[i : i + 4096])
 
 
 async def main() -> None:
