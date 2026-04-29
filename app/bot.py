@@ -8,11 +8,11 @@ from typing import Dict, List, Tuple
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.enums import ContentType
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message
 
-from app.config import load_config
+from app.config import Config, load_config
 from app.db import Database
 from app.keyboards import kb_battle_pick, kb_duel_accept_pick, kb_duel_offer, kb_duel_pick, kb_energy_menu, kb_energy_upgrade, kb_no_chips, kb_profile_actions, kb_reset_confirm, kb_setup_confirm, kb_share_duel, kb_start
 from app.middleware import DI
@@ -146,7 +146,8 @@ async def _render_and_send_profile(message_or_cb: Message | CallbackQuery, *, bo
                 f"Вы можете получить новые фишки через {_fmt_seconds(left)}.",
                 "Вы получите уведомление, когда энергия восстановится.",
             ]
-    render_profile(user_title=_display_name(message_or_cb), avatar_path=avatar, stickers=_inv_to_render(paths, inv_items), out_path=out, empty_lines=empty_lines)
+    duels_count = await db.get_user_duels_count(user_id)
+    render_profile(user_title=_display_name(message_or_cb), avatar_path=avatar, stickers=_inv_to_render(paths, inv_items), out_path=out, empty_lines=empty_lines, duels_count=duels_count)
 
     if len(inv_items) == 0:
         if int(user.setup_done) == 0:
@@ -358,7 +359,8 @@ async def cb_duel_accept(cb: CallbackQuery, state: FSMContext, db: Database, bot
         except Exception:
             pass
     out = os.path.join(os.getcwd(), "data", "renders", f"duel_accept_{cb.from_user.id}_{duel_id}.png")
-    render_profile(user_title=_display_name(cb), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out)
+    user_duels = await db.get_user_duels_count(cb.from_user.id)
+    render_profile(user_title=_display_name(cb), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, duels_count=user_duels)
     pic = FSInputFile(out)
     await cb.message.answer_photo(pic, caption="выберите фишки кнопками", reply_markup=kb_duel_accept_pick(inv_items, picked={}, target_energy=int(duel.get("target_energy") or 0), duel_id=duel_id))
     await cb.answer()
@@ -390,7 +392,8 @@ async def _send_profile_to_user(user_id: int, *, bot: Bot, db: Database, cache: 
     avatar = await avatars.get_avatar_path(bot, user_id)
     out = os.path.join(os.getcwd(), "data", "renders", f"profile_{user_id}.png")
     user_title = await _display_name_by_id(bot, user_id)
-    render_profile(user_title=user_title, avatar_path=avatar, stickers=_inv_to_render(paths, inv_items), out_path=out)
+    duels_count = await db.get_user_duels_count(user_id)
+    render_profile(user_title=user_title, avatar_path=avatar, stickers=_inv_to_render(paths, inv_items), out_path=out, duels_count=duels_count)
     markup = kb_start(no_chips=(len(inv_items) == 0)) if len(inv_items) == 0 else kb_profile_actions(user.energy)
     await bot.send_photo(chat_id=user_id, photo=FSInputFile(out), caption=caption, reply_markup=markup)
 
@@ -912,6 +915,26 @@ async def cb_reset_ok(cb: CallbackQuery, state: FSMContext, db: Database, bot: B
     await db.set_inventory_exact(cb.from_user.id, {})
     await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id, edit_in_place=True)
     await cb.answer()
+
+
+@router.message(Command("stats"))
+async def cmd_stats(message: Message, db: Database, cfg: Config) -> None:
+    if cfg.admin_id is None or message.from_user.id != cfg.admin_id:
+        return
+    stats = await db.get_all_users_stats()
+    if not stats:
+        await message.answer("Нет игроков.")
+        return
+    total_duels = sum(s["duels_count"] for s in stats)
+    lines = [f"📊 Игроков: {len(stats)}  |  Дуэлей: {total_duels}\n"]
+    for s in stats:
+        setup = "✅" if s["setup_done"] else "⏳"
+        lines.append(
+            f"<code>{s['user_id']}</code> | 🃏{s['chips_count']} | ⚡{s['energy']} | ⚔️{s['duels_count']} | {setup}"
+        )
+    text = "\n".join(lines)
+    for i in range(0, len(text), 4096):
+        await message.answer(text[i : i + 4096], parse_mode="HTML")
 
 
 async def main() -> None:

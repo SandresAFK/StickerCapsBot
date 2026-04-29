@@ -282,7 +282,7 @@ def _draw_bolt(draw: ImageDraw.ImageDraw, x: int, y: int, size: int, *, fill=(25
         pass
 
 
-def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[RenderSticker], out_path: str, empty_lines: List[str] | None = None) -> str:
+def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[RenderSticker], out_path: str, empty_lines: List[str] | None = None, duels_count: int = 0) -> str:
     w = 900
     cols, chip = 3, 220
     gap_x, gap_y = 35, 55
@@ -310,33 +310,29 @@ def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[R
 
     title_bb = draw.textbbox((0, 0), user_title, font=ft)
     title_h = title_bb[3] - title_bb[1]
-    sub_text = "Коллекция фишек"
-    sub_bb = draw.textbbox((0, 0), sub_text, font=fs)
-    sub_h = sub_bb[3] - sub_bb[1]
 
     total_chips = len(stickers)
     total_energy = sum(int(s.count) for s in stickers)
-    totals_text = f"У вас {total_chips} фишек · "
+    totals_text = f"{total_chips} фишек · "
     totals_bb = draw.textbbox((0, 0), totals_text, font=fs)
     totals_h = totals_bb[3] - totals_bb[1]
 
-    gap1, gap2 = 8, 6
-    block_h = title_h + gap1 + sub_h + gap2 + totals_h
+    gap1 = 10
+    block_h = title_h + gap1 + totals_h
     y0 = header_top + max(0, int((header_h - block_h) / 2))
 
     y_title = y0
-    y_sub = y_title + title_h + gap1
-    y_totals = y_sub + sub_h + gap2
+    y_totals = y_title + title_h + gap1
 
     draw.text((left_x, y_title - title_bb[1]), user_title, font=ft, fill=C_TEXT)
-    draw.text((left_x, y_sub - sub_bb[1]), sub_text, font=fs, fill=C_SUB)
 
     draw.text((left_x, y_totals - totals_bb[1]), totals_text, font=fs, fill=C_SUB)
     bolt_x = left_x + (totals_bb[2] - totals_bb[0])
     bolt_size = 20
     bolt_y = int(y_totals + (totals_h - bolt_size) / 2)
     _draw_bolt(draw, int(bolt_x), bolt_y, bolt_size)
-    draw.text((int(bolt_x) + bolt_size + 6, y_totals - totals_bb[1]), str(total_energy), font=fs, fill=C_SUB)
+    energy_duels_text = f"{total_energy} · {duels_count} дуэлей"
+    draw.text((int(bolt_x) + bolt_size + 6, y_totals - totals_bb[1]), energy_duels_text, font=fs, fill=C_SUB)
 
     _rounded_rect(draw, (40, 260, w - 40, h - 40), radius=30, fill=C_CARD)
 

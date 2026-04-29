@@ -11,6 +11,7 @@ class Config:
     bot_token: str
     default_sticker_set_name: str
     data_dir: str
+    admin_id: int | None
 
 
 def load_config() -> Config:
@@ -25,5 +26,7 @@ def load_config() -> Config:
 
     data_dir = os.path.abspath(os.path.join(os.getcwd(), "data"))
     os.makedirs(data_dir, exist_ok=True)
-    return Config(bot_token=token, default_sticker_set_name=sticker_set, data_dir=data_dir)
+    admin_id_str = os.getenv("ADMIN_ID", "").strip()
+    admin_id: int | None = int(admin_id_str) if admin_id_str.lstrip("-").isdigit() else None
+    return Config(bot_token=token, default_sticker_set_name=sticker_set, data_dir=data_dir, admin_id=admin_id)
 

@@ -255,6 +255,34 @@ class Database:
                 )
             await db.commit()
 
+    async def get_user_duels_count(self, user_id: int) -> int:
+        async with self.connect() as db:
+            await self._configure(db)
+            row = await self._fetchone(
+                db,
+                "SELECT COUNT(*) as cnt FROM duels WHERE status='done' AND (creator_id=? OR opponent_id=?)",
+                (user_id, user_id),
+            )
+            return int(row["cnt"]) if row else 0
+
+    async def get_all_users_stats(self) -> list[dict]:
+        async with self.connect() as db:
+            await self._configure(db)
+            rows = await self._fetchall(
+                db,
+                """
+                SELECT u.user_id, u.energy, u.setup_done, u.created_at,
+                       COUNT(DISTINCT i.sticker_file_id) as chips_count,
+                       (SELECT COUNT(*) FROM duels d WHERE d.status='done' AND (d.creator_id=u.user_id OR d.opponent_id=u.user_id)) as duels_count
+                FROM users u
+                LEFT JOIN inventory i ON i.user_id = u.user_id
+                GROUP BY u.user_id
+                ORDER BY u.created_at DESC
+                """,
+                (),
+            )
+            return [dict(r) for r in rows]
+
     async def add_inventory(self, user_id: int, delta: Dict[str, int]) -> None:
         async with self.connect() as db:
             await self._configure(db)
