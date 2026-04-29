@@ -386,28 +386,26 @@ def render_duel_result(
     fn = _load_font(24)
 
     _rounded_rect(draw, (40, 40, w - 40, 220), radius=30, fill=C_CARD)
-    draw.ellipse((70, 80, 160, 170), fill=(70, 70, 80, 255))
-    if avatar_path and os.path.exists(avatar_path):
-        try:
-            _paste_circle(bg, avatar_path, 70, 80, 90)
-        except Exception:
-            pass
-    draw.text((180, 80), user_title, font=ft, fill=C_TEXT)
-    draw.text((180, 140), title, font=fs, fill=C_SUB)
+    draw.text((70, 80), user_title, font=ft, fill=C_TEXT)
+    draw.text((70, 140), title, font=fs, fill=C_SUB)
 
     _rounded_rect(draw, (40, 250, w - 40, h - 40), radius=30, fill=C_CARD)
 
-    def _delta_str(v: int) -> str:
-        return f"+{v}" if v >= 0 else str(v)
+    def _draw_delta_line(v: int, y: int) -> None:
+        sign = "+" if v >= 0 else "−"
+        sign_bb = draw.textbbox((0, 0), sign, font=ft)
+        sign_w = sign_bb[2] - sign_bb[0]
+        draw.text((70, y), sign, font=ft, fill=C_TEXT)
+        bolt_x = 70 + sign_w + 12
+        _draw_bolt(draw, bolt_x, y + 10, 26)
+        draw.text((bolt_x + 34, y), str(abs(v)), font=ft, fill=C_TEXT)
 
     draw.text((70, 280), str(attacker_label), font=ft, fill=C_TEXT)
-    _draw_bolt(draw, 70, 340, 26)
-    draw.text((102, 330), _delta_str(attacker_delta), font=ft, fill=C_TEXT)
+    _draw_delta_line(attacker_delta, 330)
     draw.text((70, 400), "Трофеи:", font=fs, fill=C_SUB)
 
     draw.text((70, 760), str(defender_label), font=ft, fill=C_TEXT)
-    _draw_bolt(draw, 70, 820, 26)
-    draw.text((102, 810), _delta_str(defender_delta), font=ft, fill=C_TEXT)
+    _draw_delta_line(defender_delta, 810)
     draw.text((70, 880), "Трофеи:", font=fs, fill=C_SUB)
 
     def render_grid(items: List[RenderSticker], top_y: int):
