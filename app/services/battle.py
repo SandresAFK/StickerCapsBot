@@ -45,16 +45,19 @@ def run_battle(player_units: List[BattleUnit], enemy_units: List[BattleUnit]) ->
 
 
 def _winner_pct(diff: int) -> float:
-    """Доля энергии победителя в зависимости от разницы слот-машин.
-    Максимально близко к рандому (50/50), слот лишь слегка смещает шансы."""
-    if diff < 15:
+    """Доля энергии победителя в зависимости от разницы слот-машин."""
+    if diff < 10:
         return 0.50
+    elif diff < 20:
+        return 0.60
     elif diff < 30:
-        return 0.53
-    elif diff < 45:
-        return 0.57
+        return 0.75
+    elif diff < 40:
+        return 0.80
+    elif diff < 50:
+        return 0.85
     else:
-        return 0.62
+        return 1.00
 
 
 def distribute_by_slot(
