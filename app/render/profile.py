@@ -22,10 +22,17 @@ C_TEXT = (245, 245, 245, 255)
 C_SUB = (180, 180, 180, 255)
 C_BLUE = (64, 123, 255, 255)
 CHIP_RING = [
-    (45, 182, 103, 255),  # green
-    (66, 119, 231, 255),  # blue
-    (236, 190, 63, 255),  # gold
+    (220, 55,  55,  255),  # 1 — red
+    (55,  110, 225, 255),  # 2 — blue
+    (45,  182, 103, 255),  # 3 — green
+    (155, 55,  220, 255),  # 4 — purple
+    (230, 115, 30,  255),  # 5 — orange
+    (30,  195, 215, 255),  # 6 — cyan
+    (220, 55,  145, 255),  # 7 — pink
+    (130, 205, 35,  255),  # 8 — lime
+    (70,  35,  185, 255),  # 9 — indigo
 ]
+CHIP_RING_GOLD = (236, 190, 63, 255)
 
 
 def _clamp_u8(v: int) -> int:
@@ -152,7 +159,7 @@ def _draw_chip(*, img: Image.Image, draw: ImageDraw.ImageDraw, sticker_path: str
     except Exception:
         draw.ellipse((x + 6, y + 10, x + size + 8, y + size + 12), fill=(0, 0, 0, 70))
 
-    ring_color = CHIP_RING[(max(1, nominal) - 1) % len(CHIP_RING)]
+    ring_color = CHIP_RING[min(max(1, nominal), 9) - 1] if nominal < 10 else CHIP_RING_GOLD
     draw.ellipse((x, y, x + size, y + size), fill=ring_color)
 
     rim = int(round(max(6, size // 28) * 1.5))
