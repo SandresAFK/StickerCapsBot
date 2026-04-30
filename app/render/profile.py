@@ -527,21 +527,23 @@ def render_battle_result(
     fn = _load_font(24)
 
     _rounded_rect(draw, (40, 40, w - 40, 220), radius=30, fill=C_CARD)
-    draw.ellipse((70, 80, 160, 170), fill=(70, 70, 80, 255))
+    has_avatar = False
     if avatar_path and os.path.exists(avatar_path):
         try:
             _paste_circle(bg, avatar_path, 70, 80, 90)
+            has_avatar = True
         except Exception:
             pass
-    draw.text((180, 80), user_title, font=ft, fill=C_TEXT)
-    draw.text((180, 140), title, font=fs, fill=C_SUB)
+    text_x = 180 if has_avatar else 70
+    draw.text((text_x, 80), user_title, font=ft, fill=C_TEXT)
+    draw.text((text_x, 140), title, font=fs, fill=C_SUB)
 
     _rounded_rect(draw, (40, 250, w - 40, h - 40), radius=30, fill=C_CARD)
     won_energy = sum(int(s.count) for s in won)
     lost_energy = sum(int(s.count) for s in lost)
     if str(top_label).strip() in ("Нападающий", "Нападающий -"):
         label_text = "Нападающий"
-        sep_text = " - "
+        sep_text = " "
     else:
         label_text = str(top_label)
         sep_text = ""
