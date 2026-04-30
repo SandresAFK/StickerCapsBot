@@ -394,7 +394,10 @@ async def _send_profile_to_user(user_id: int, *, bot: Bot, db: Database, cache: 
     user_title = await _display_name_by_id(bot, user_id)
     duels_count = await db.get_user_duels_count(user_id)
     render_profile(user_title=user_title, avatar_path=avatar, stickers=_inv_to_render(paths, inv_items), out_path=out, duels_count=duels_count)
-    markup = kb_start(no_chips=(len(inv_items) == 0)) if len(inv_items) == 0 else kb_profile_actions(user.energy)
+    if len(inv_items) == 0:
+        markup = kb_start(no_chips=True) if int(user.setup_done) == 0 else kb_no_chips(user.energy)
+    else:
+        markup = kb_profile_actions(user.energy)
     await bot.send_photo(chat_id=user_id, photo=FSInputFile(out), caption=caption, reply_markup=markup)
 
 
