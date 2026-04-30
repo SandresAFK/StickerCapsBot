@@ -435,8 +435,9 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
         bot.send_dice(chat_id=creator_id, emoji="🎳"),
         bot.send_dice(chat_id=cb.from_user.id, emoji="🎳"),
     )
-    creator_slot = creator_dice_msg.dice.value
-    opponent_slot = opponent_dice_msg.dice.value
+    _bowling_pins = {1: 0, 2: 1, 3: 3, 4: 4, 5: 5, 6: 6}
+    creator_slot = _bowling_pins.get(creator_dice_msg.dice.value, creator_dice_msg.dice.value)
+    opponent_slot = _bowling_pins.get(opponent_dice_msg.dice.value, opponent_dice_msg.dice.value)
     await asyncio.sleep(4)  # ждём завершения анимации слот-машины
 
     result = distribute_by_slot(creator_units, opponent_units, creator_slot, opponent_slot)
