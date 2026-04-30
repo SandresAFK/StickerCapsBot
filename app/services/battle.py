@@ -44,32 +44,17 @@ def run_battle(player_units: List[BattleUnit], enemy_units: List[BattleUnit]) ->
     return BattleResult(player_won=player_won, enemy_won=enemy_won)
 
 
-def _winner_pct(diff: int) -> float:
-    """Доля энергии победителя в зависимости от разницы бросков боулинга (0-5)."""
-    if diff == 0:
-        return 0.50
-    elif diff == 1:
-        return 0.60
-    elif diff == 2:
-        return 0.70
-    elif diff == 3:
-        return 0.80
-    elif diff == 4:
-        return 0.90
-    else:
-        return 1.00
-
-
 def distribute_by_slot(
     player_units: List[BattleUnit],
     enemy_units: List[BattleUnit],
     player_slot: int,
     enemy_slot: int,
 ) -> BattleResult:
-    """Распределяет фишки: победитель получает свою долю, округление в его пользу."""
-    diff = abs(player_slot - enemy_slot)
-    w_pct = _winner_pct(diff)
+    """Распределяет фишки пропорционально очкам боулинга: winner_score / total_score."""
+    total_score = player_slot + enemy_slot
     player_wins = player_slot >= enemy_slot
+    winner_score = max(player_slot, enemy_slot)
+    w_pct = (winner_score / total_score) if total_score > 0 else 0.5
 
     all_units: List[BattleUnit] = list(player_units) + list(enemy_units)
     random.shuffle(all_units)
