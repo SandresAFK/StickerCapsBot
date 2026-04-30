@@ -183,7 +183,7 @@ async def cmd_start(message: Message, state: FSMContext, db: Database, bot: Bot,
         arg = ""
     if arg.startswith("duel_"):
         duel_id = arg[len("duel_") :]
-        await _show_duel_offer(message, duel_id=duel_id, db=db, bot=bot, cache=cache)
+        await _show_duel_offer(message, duel_id=duel_id, db=db, bot=bot, cache=cache, avatars=avatars)
         return
     await _render_and_send_profile(message, bot=bot, db=db, cache=cache, avatars=avatars, user_id=message.from_user.id)
 
@@ -450,11 +450,11 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
 
     new_inv_creator: Dict[str, int] = {k: int(v) for k, v in inv_creator.items() if k not in stake_creator}
     for u in result.player_won:
-        new_inv_creator[u.file_id] = max(int(new_inv_creator.get(u.file_id, 0)), int(u.nominal))
+        new_inv_creator[u.file_id] = int(new_inv_creator.get(u.file_id, 0)) + int(u.nominal)
 
     new_inv_op: Dict[str, int] = {k: int(v) for k, v in inv_op.items() if k not in stake_op}
     for u in result.enemy_won:
-        new_inv_op[u.file_id] = max(int(new_inv_op.get(u.file_id, 0)), int(u.nominal))
+        new_inv_op[u.file_id] = int(new_inv_op.get(u.file_id, 0)) + int(u.nominal)
 
     await db.set_inventory_exact(creator_id, new_inv_creator)
     await db.set_inventory_exact(cb.from_user.id, new_inv_op)
@@ -528,7 +528,7 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     await cb.answer("Бой завершён.")
 
 
-async def _show_duel_offer(message: Message, *, duel_id: str, db: Database, bot: Bot, cache: StickerCache) -> None:
+async def _show_duel_offer(message: Message, *, duel_id: str, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
     duel = await db.get_duel(duel_id)
     if not duel or duel.get("status") != "open":
         await message.answer("Этот вызов недоступен.")
@@ -555,11 +555,16 @@ async def _show_duel_offer(message: Message, *, duel_id: str, db: Database, bot:
             pass
     won = [RenderSticker(file_id=fid, path=paths[fid], count=int(inv_creator.get(fid, 1))) for fid in creator_pick if fid in paths]
 
+    creator_avatar = None
+    try:
+        creator_avatar = await avatars.get_avatar_path(bot, creator_id)
+    except Exception:
+        pass
     out = os.path.join(os.getcwd(), "data", "renders", f"duel_offer_{creator_id}_{duel_id}.png")
     render_battle_result(
         title="",
         user_title=f"Дуэль vs {creator_name}",
-        avatar_path=None,
+        avatar_path=creator_avatar,
         lost=[],
         won=won,
         out_path=out,

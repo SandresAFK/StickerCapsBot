@@ -131,10 +131,9 @@ def kb_energy_upgrade(inv_items: List[Tuple[str, int]], spend: Dict[str, int], e
     used = sum(int(x) for x in spend.values())
     for idx, (file_id, total) in enumerate(inv_items):
         add = int(spend.get(file_id, 0))
-        b.row(
-            InlineKeyboardButton(text="+", callback_data=f"eu+:{idx}"),
-            InlineKeyboardButton(text=f"№{idx+1} · ⚡{total}  +{add}", callback_data="noop"),
-        )
+        mark = f" +{add}" if add > 0 else ""
+        b.button(text=f"№{idx+1} · ⚡{total}{mark} ＋", callback_data=f"eu+:{idx}")
+    b.adjust(3)
     b.row(InlineKeyboardButton(text=f"Применить ({used}/{energy})", callback_data="eu_go"))
     b.row(InlineKeyboardButton(text="Отмена", callback_data="eu_cancel"))
     return b.as_markup()

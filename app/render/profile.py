@@ -367,6 +367,25 @@ def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[R
     return out_path
 
 
+def _wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
+    words = text.split()
+    lines: list[str] = []
+    cur = ""
+    tmp_img = Image.new("RGBA", (1, 1))
+    tmp_draw = ImageDraw.Draw(tmp_img)
+    for word in words:
+        test = (cur + " " + word).strip()
+        bb = tmp_draw.textbbox((0, 0), test, font=font)
+        if bb[2] - bb[0] > max_width and cur:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = test
+    if cur:
+        lines.append(cur)
+    return lines or [text]
+
+
 def render_duel_result(
     *,
     title: str,
@@ -380,49 +399,93 @@ def render_duel_result(
     defender_gained: List[RenderSticker],
     out_path: str,
 ) -> str:
-    w, h = 900, 1200
-    bg = Image.new("RGBA", (w, h), C_BG)
-    draw = ImageDraw.Draw(bg)
+    w = 900
+    chip_sz, cols, chip_gap = 220, 3, 35
+    PAD_L = 70
+
+    def _grid_h(items: List[RenderSticker]) -> int:
+        if not items:
+            return 40
+        rows = (len(items) + cols - 1) // cols
+        return rows * chip_sz + (rows - 1) * chip_gap
+
     ft = _load_font(40)
     fs = _load_font(28)
     fb = _load_font(24)
     fn = _load_font(24)
 
-    _rounded_rect(draw, (40, 40, w - 40, 220), radius=30, fill=C_CARD)
-    draw.text((70, 80), user_title, font=ft, fill=C_TEXT)
-    draw.text((70, 140), title, font=fs, fill=C_SUB)
+    title_lines = _wrap_text(user_title, ft, w - PAD_L - 40)
+    line_h = ft.size + 6
+    header_text_h = len(title_lines) * line_h + 10 + (fs.size + 4)
+    header_h = max(180, header_text_h + 60)
 
-    _rounded_rect(draw, (40, 250, w - 40, h - 40), radius=30, fill=C_CARD)
+    ag_h = _grid_h(attacker_gained)
+    dg_h = _grid_h(defender_gained)
+
+    LABEL_H = 50
+    DELTA_H = 60
+    TROPHIES_LABEL_H = 44
+    SECTION_GAP = 50
+    PAD_TOP = 30
+    PAD_BOTTOM = 50
+
+    main_content_h = (PAD_TOP + LABEL_H + DELTA_H + TROPHIES_LABEL_H + ag_h +
+                      SECTION_GAP + LABEL_H + DELTA_H + TROPHIES_LABEL_H + dg_h + PAD_BOTTOM)
+
+    header_top = 40
+    header_bottom = header_top + header_h
+    main_top = header_bottom + 30
+    h = main_top + main_content_h + 40
+
+    bg = Image.new("RGBA", (w, h), C_BG)
+    draw = ImageDraw.Draw(bg)
+
+    _rounded_rect(draw, (40, header_top, w - 40, header_bottom), radius=30, fill=C_CARD)
+    ty = header_top + 30
+    for ln in title_lines:
+        draw.text((PAD_L, ty), ln, font=ft, fill=C_TEXT)
+        ty += line_h
+    draw.text((PAD_L, ty + 4), title, font=fs, fill=C_SUB)
+
+    _rounded_rect(draw, (40, main_top, w - 40, h - 40), radius=30, fill=C_CARD)
 
     def _draw_delta_line(v: int, y: int) -> None:
-        sign = "+" if v >= 0 else "−"
+        sign = "+" if v >= 0 else "\u2212"
         sign_bb = draw.textbbox((0, 0), sign, font=ft)
         sign_w = sign_bb[2] - sign_bb[0]
-        draw.text((70, y), sign, font=ft, fill=C_TEXT)
-        bolt_x = 70 + sign_w + 12
+        draw.text((PAD_L, y), sign, font=ft, fill=C_TEXT)
+        bolt_x = PAD_L + sign_w + 12
         _draw_bolt(draw, bolt_x, y + 10, 26)
         draw.text((bolt_x + 34, y), str(abs(v)), font=ft, fill=C_TEXT)
 
-    draw.text((70, 280), str(attacker_label), font=ft, fill=C_TEXT)
-    _draw_delta_line(attacker_delta, 330)
-    draw.text((70, 400), "Трофеи:", font=fs, fill=C_SUB)
-
-    draw.text((70, 760), str(defender_label), font=ft, fill=C_TEXT)
-    _draw_delta_line(defender_delta, 810)
-    draw.text((70, 880), "Трофеи:", font=fs, fill=C_SUB)
-
-    def render_grid(items: List[RenderSticker], top_y: int):
-        chip, cols, gap = 220, 3, 35
-        for i, s in enumerate(items[:9]):
+    def render_grid(items: List[RenderSticker], top_y: int) -> None:
+        for i, s in enumerate(items):
             r, c = i // cols, i % cols
-            x = 70 + c * (chip + gap)
-            y = top_y + r * (chip + gap)
-            _draw_chip(img=bg, draw=draw, sticker_path=s.path, x=x, y=y, size=chip, nominal=int(s.count), number=i + 1, font_badge=fb, font_num=fn, show_number=False)
+            x = PAD_L + c * (chip_sz + chip_gap)
+            y = top_y + r * (chip_sz + chip_gap)
+            _draw_chip(img=bg, draw=draw, sticker_path=s.path, x=x, y=y, size=chip_sz,
+                       nominal=int(s.count), number=i + 1, font_badge=fb, font_num=fn, show_number=False)
         if not items:
-            draw.text((70, top_y + 20), "нет", font=fs, fill=C_SUB)
+            draw.text((PAD_L, top_y + 8), "\u043d\u0435\u0442", font=fs, fill=C_SUB)
 
-    render_grid(attacker_gained, 450)
-    render_grid(defender_gained, 930)
+    y = main_top + PAD_TOP
+    draw.text((PAD_L, y), str(attacker_label), font=ft, fill=C_TEXT)
+    y += LABEL_H
+    _draw_delta_line(attacker_delta, y)
+    y += DELTA_H
+    draw.text((PAD_L, y), "\u0422\u0440\u043e\u0444\u0435\u0438:", font=fs, fill=C_SUB)
+    y += TROPHIES_LABEL_H
+    render_grid(attacker_gained, y)
+    y += ag_h + SECTION_GAP
+
+    draw.text((PAD_L, y), str(defender_label), font=ft, fill=C_TEXT)
+    y += LABEL_H
+    _draw_delta_line(defender_delta, y)
+    y += DELTA_H
+    draw.text((PAD_L, y), "\u0422\u0440\u043e\u0444\u0435\u0438:", font=fs, fill=C_SUB)
+    y += TROPHIES_LABEL_H
+    render_grid(defender_gained, y)
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     bg.convert("RGB").save(out_path, "PNG")
     return out_path
