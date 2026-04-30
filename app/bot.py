@@ -495,7 +495,7 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     out_op = os.path.join(os.getcwd(), "data", "renders", f"duel_result_{creator_id}_{cb.from_user.id}_{ts}_o.png")
 
     render_duel_result(
-        title=f"🎳 {creator_slot} vs {opponent_slot}",
+        title=f"{creator_slot} vs {opponent_slot}",
         user_title=f"{creator_name} vs {opponent_name}",
         avatar_path=None,
         attacker_label=f"Нападающий (ты, {creator_name}):",
@@ -507,7 +507,7 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
         out_path=out_creator,
     )
     render_duel_result(
-        title=f"🎳 {creator_slot} vs {opponent_slot}",
+        title=f"{creator_slot} vs {opponent_slot}",
         user_title=f"{creator_name} vs {opponent_name}",
         avatar_path=None,
         attacker_label=f"Нападающий ({creator_name}):",

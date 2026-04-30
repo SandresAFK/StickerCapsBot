@@ -272,6 +272,15 @@ def _draw_chip(*, img: Image.Image, draw: ImageDraw.ImageDraw, sticker_path: str
     draw.text((tx - eb[0], ty - eb[1]), energy, font=font_energy, fill=(255, 255, 255, 255))
 
 
+def _draw_bowling_ball(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int) -> None:
+    r = radius
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(40, 40, 50, 255))
+    hr = max(2, r // 5)
+    draw.ellipse((cx - r // 3 - hr, cy - r // 3 - hr, cx - r // 3 + hr, cy - r // 3 + hr), fill=(80, 80, 90, 255))
+    draw.ellipse((cx + r // 6 - hr, cy - r // 2 - hr, cx + r // 6 + hr, cy - r // 2 + hr), fill=(80, 80, 90, 255))
+    draw.ellipse((cx + r // 2 - hr, cy - r // 5 - hr, cx + r // 2 + hr, cy - r // 5 + hr), fill=(80, 80, 90, 255))
+
+
 def _draw_bolt(draw: ImageDraw.ImageDraw, x: int, y: int, size: int, *, fill=(255, 255, 255, 255), outline=(236, 190, 63, 255)) -> None:
     s = float(size)
     bolt = [
@@ -414,6 +423,7 @@ def render_duel_result(
     fb = _load_font(24)
     fn = _load_font(24)
 
+    BALL_R = 14
     title_lines = _wrap_text(user_title, ft, w - PAD_L - 40)
     line_h = ft.size + 6
     header_text_h = len(title_lines) * line_h + 10 + (fs.size + 4)
@@ -445,7 +455,11 @@ def render_duel_result(
     for ln in title_lines:
         draw.text((PAD_L, ty), ln, font=ft, fill=C_TEXT)
         ty += line_h
-    draw.text((PAD_L, ty + 4), title, font=fs, fill=C_SUB)
+    score_y = ty + 4
+    ball_cx = PAD_L + BALL_R
+    ball_cy = score_y + fs.size // 2
+    _draw_bowling_ball(draw, ball_cx, ball_cy, BALL_R)
+    draw.text((PAD_L + BALL_R * 2 + 8, score_y), title, font=fs, fill=C_SUB)
 
     _rounded_rect(draw, (40, main_top, w - 40, h - 40), radius=30, fill=C_CARD)
 
