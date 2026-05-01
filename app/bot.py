@@ -14,7 +14,7 @@ from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message
 
 from app.config import Config, load_config
 from app.db import Database
-from app.keyboards import kb_battle_pick, kb_duel_accept_pick, kb_duel_offer, kb_duel_pick, kb_energy_menu, kb_energy_upgrade, kb_no_chips, kb_profile_actions, kb_reset_confirm, kb_setup_confirm, kb_share_duel, kb_start
+from app.keyboards import kb_battle_pick, kb_duel_accept_pick, kb_duel_offer, kb_duel_pick, kb_energy_menu, kb_energy_upgrade, kb_no_chips, kb_profile_actions, kb_reset_confirm, kb_result_actions, kb_setup_confirm, kb_share_duel, kb_start
 from app.middleware import DI
 from app.render.profile import RenderSticker, render_battle_result, render_duel_result, render_profile
 from app.services.avatars import AvatarCache
@@ -523,10 +523,8 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
         out_path=out_op,
     )
 
-    await bot.send_photo(chat_id=creator_id, photo=FSInputFile(out_creator), caption="")
-    await bot.send_photo(chat_id=cb.from_user.id, photo=FSInputFile(out_op), caption="")
-    await _send_profile_to_user(creator_id, bot=bot, db=db, cache=cache, avatars=avatars)
-    await _send_profile_to_user(cb.from_user.id, bot=bot, db=db, cache=cache, avatars=avatars)
+    await bot.send_photo(chat_id=creator_id, photo=FSInputFile(out_creator), caption="", reply_markup=kb_result_actions())
+    await bot.send_photo(chat_id=cb.from_user.id, photo=FSInputFile(out_op), caption="", reply_markup=kb_result_actions())
 
     await state.clear()
     await cb.answer("Бой завершён.")
@@ -780,8 +778,7 @@ async def cb_battle_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
     avatar = await avatars.get_avatar_path(bot, cb.from_user.id)
     render_battle_result(title="Итог схватки", user_title=_display_name(cb), avatar_path=avatar, lost=lost, won=won, out_path=out)
     await state.clear()
-    await cb.message.answer_photo(FSInputFile(out), caption="")
-    await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id)
+    await cb.message.answer_photo(FSInputFile(out), caption="", reply_markup=kb_result_actions())
 
 
 @router.callback_query(F.data == "e")

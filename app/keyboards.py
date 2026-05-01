@@ -24,6 +24,14 @@ def kb_collection_only() -> InlineKeyboardMarkup:
     return b.as_markup()
 
 
+def kb_result_actions() -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.button(text="Реванш", callback_data="pvp")
+    b.button(text="Коллекция", callback_data="collection")
+    b.adjust(2)
+    return b.as_markup()
+
+
 def kb_profile_actions(energy: int) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     if energy > 0:
