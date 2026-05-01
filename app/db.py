@@ -55,6 +55,7 @@ class Database:
                     energy INTEGER NOT NULL,
                     energy_updated_at INTEGER NOT NULL,
                     notify_energy_reset INTEGER NOT NULL DEFAULT 0,
+                    ui_language TEXT NOT NULL DEFAULT 'en',
                     setup_done INTEGER NOT NULL DEFAULT 0,
                     created_at INTEGER NOT NULL
                 );
@@ -89,6 +90,10 @@ class Database:
                 pass
             try:
                 await db.execute("ALTER TABLE users ADD COLUMN setup_done INTEGER NOT NULL DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                await db.execute("ALTER TABLE users ADD COLUMN ui_language TEXT NOT NULL DEFAULT 'en'")
             except Exception:
                 pass
             await db.commit()
@@ -158,8 +163,9 @@ class Database:
             )
             await db.commit()
 
-    async def get_or_create_user(self, user_id: int) -> User:
+    async def get_or_create_user(self, user_id: int, ui_language: str | None = None) -> User:
         now = int(time.time())
+        language = str(ui_language or "en")
         async with self.connect() as db:
             await self._configure(db)
             row = await self._fetchone(
@@ -168,13 +174,24 @@ class Database:
                 (user_id,),
             )
             if row:
+                if ui_language is not None:
+                    await db.execute("UPDATE users SET ui_language=? WHERE user_id=?", (language, user_id))
+                    await db.commit()
                 return User(**dict(row))
             await db.execute(
-                "INSERT INTO users(user_id, energy, energy_updated_at, notify_energy_reset, setup_done, created_at) VALUES(?,?,?,?,?,?)",
-                (user_id, 3, now, 0, 0, now),
+                "INSERT INTO users(user_id, energy, energy_updated_at, notify_energy_reset, ui_language, setup_done, created_at) VALUES(?,?,?,?,?,?,?)",
+                (user_id, 3, now, 0, language, 0, now),
             )
             await db.commit()
             return User(user_id=user_id, energy=3, energy_updated_at=now, setup_done=0, created_at=now)
+
+    async def get_ui_language(self, user_id: int) -> str:
+        async with self.connect() as db:
+            await self._configure(db)
+            row = await self._fetchone(db, "SELECT ui_language FROM users WHERE user_id=?", (user_id,))
+            if not row:
+                return "en"
+            return str(row["ui_language"] or "en")
 
     async def set_setup_done(self, user_id: int, value: int) -> None:
         async with self.connect() as db:

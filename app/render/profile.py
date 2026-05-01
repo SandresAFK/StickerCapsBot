@@ -7,6 +7,8 @@ from typing import List
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
+from app.i18n import t
+
 
 @dataclass(frozen=True)
 class RenderSticker:
@@ -298,7 +300,7 @@ def _draw_bolt(draw: ImageDraw.ImageDraw, x: int, y: int, size: int, *, fill=(25
         pass
 
 
-def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[RenderSticker], out_path: str, empty_lines: List[str] | None = None, duels_count: int = 0) -> str:
+def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[RenderSticker], out_path: str, empty_lines: List[str] | None = None, duels_count: int = 0, lang: str = "ru") -> str:
     w = 900
     cols, chip = 3, 220
     gap_x, gap_y = 35, 55
@@ -329,7 +331,7 @@ def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[R
 
     total_chips = len(stickers)
     total_energy = sum(int(s.count) for s in stickers)
-    totals_text = f"{total_chips} фишек · "
+    totals_text = t(lang, "profile_totals", chips=total_chips)
     totals_bb = draw.textbbox((0, 0), totals_text, font=fs)
     totals_h = totals_bb[3] - totals_bb[1]
 
@@ -347,13 +349,13 @@ def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[R
     bolt_size = 20
     bolt_y = int(y_totals + (totals_h - bolt_size) / 2)
     _draw_bolt(draw, int(bolt_x), bolt_y, bolt_size)
-    energy_duels_text = f"{total_energy} · {duels_count} дуэлей"
+    energy_duels_text = t(lang, "profile_energy_duels", energy=total_energy, duels=duels_count)
     draw.text((int(bolt_x) + bolt_size + 6, y_totals - totals_bb[1]), energy_duels_text, font=fs, fill=C_SUB)
 
     _rounded_rect(draw, (40, 260, w - 40, h - 40), radius=30, fill=C_CARD)
 
     if not stickers:
-        lines = ["Фишек нет."]
+        lines = [t(lang, "no_chips")]
         if empty_lines:
             lines.extend([str(x) for x in empty_lines if str(x).strip()])
         y = 380
@@ -407,6 +409,7 @@ def render_duel_result(
     attacker_gained: List[RenderSticker],
     defender_gained: List[RenderSticker],
     out_path: str,
+    lang: str = "ru",
 ) -> str:
     w = 900
     chip_sz, cols, chip_gap = 220, 3, 35
@@ -480,14 +483,14 @@ def render_duel_result(
             _draw_chip(img=bg, draw=draw, sticker_path=s.path, x=x, y=y, size=chip_sz,
                        nominal=int(s.count), number=i + 1, font_badge=fb, font_num=fn, show_number=False)
         if not items:
-            draw.text((PAD_L, top_y + 8), "\u043d\u0435\u0442", font=fs, fill=C_SUB)
+            draw.text((PAD_L, top_y + 8), t(lang, "no_chips"), font=fs, fill=C_SUB)
 
     y = main_top + PAD_TOP
     draw.text((PAD_L, y), str(attacker_label), font=ft, fill=C_TEXT)
     y += LABEL_H
     _draw_delta_line(attacker_delta, y)
     y += DELTA_H
-    draw.text((PAD_L, y), "\u0422\u0440\u043e\u0444\u0435\u0438:", font=fs, fill=C_SUB)
+    draw.text((PAD_L, y), t(lang, "trophies"), font=fs, fill=C_SUB)
     y += TROPHIES_LABEL_H
     render_grid(attacker_gained, y)
     y += ag_h + SECTION_GAP
@@ -496,7 +499,7 @@ def render_duel_result(
     y += LABEL_H
     _draw_delta_line(defender_delta, y)
     y += DELTA_H
-    draw.text((PAD_L, y), "\u0422\u0440\u043e\u0444\u0435\u0438:", font=fs, fill=C_SUB)
+    draw.text((PAD_L, y), t(lang, "trophies"), font=fs, fill=C_SUB)
     y += TROPHIES_LABEL_H
     render_grid(defender_gained, y)
 
@@ -517,6 +520,7 @@ def render_battle_result(
     bottom_label: str = "Соперник:",
     show_bottom: bool = True,
     header_energy: int | None = None,
+    lang: str = "ru",
 ) -> str:
     w, h = 900, 1200
     bg = Image.new("RGBA", (w, h), C_BG)
@@ -541,8 +545,8 @@ def render_battle_result(
     _rounded_rect(draw, (40, 250, w - 40, h - 40), radius=30, fill=C_CARD)
     won_energy = sum(int(s.count) for s in won)
     lost_energy = sum(int(s.count) for s in lost)
-    if str(top_label).strip() in ("Нападающий", "Нападающий -"):
-        label_text = "Нападающий"
+    if str(top_label).strip() in (t(lang, "attacker"), t(lang, "attacker_dash")):
+        label_text = t(lang, "attacker")
         sep_text = " "
     else:
         label_text = str(top_label)

@@ -5,66 +5,68 @@ from typing import Dict, List, Tuple
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app.i18n import t
 
-def kb_start(no_chips: bool) -> InlineKeyboardMarkup:
+
+def kb_start(no_chips: bool, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     if no_chips:
-        b.button(text="Выбрать любимые стикеры", callback_data="setup")
-        b.button(text="Использовать стикеры по умолчанию", callback_data="setup_default")
+        b.button(text=t(lang, "use_favorite_stickers"), callback_data="setup")
+        b.button(text=t(lang, "use_default_stickers"), callback_data="setup_default")
     else:
-        b.button(text="Коллекция", callback_data="collection")
-        b.button(text="Схватка с другом", callback_data="pvp")
+        b.button(text=t(lang, "collection"), callback_data="collection")
+        b.button(text=t(lang, "battle_with_friend"), callback_data="pvp")
     b.adjust(1)
     return b.as_markup()
 
 
-def kb_collection_only() -> InlineKeyboardMarkup:
+def kb_collection_only(lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="Коллекция", callback_data="collection")
+    b.button(text=t(lang, "collection"), callback_data="collection")
     b.adjust(1)
     return b.as_markup()
 
 
-def kb_result_actions() -> InlineKeyboardMarkup:
+def kb_result_actions(lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="Реванш", callback_data="pvp")
-    b.button(text="Коллекция", callback_data="collection")
+    b.button(text=t(lang, "rematch"), callback_data="pvp")
+    b.button(text=t(lang, "collection"), callback_data="collection")
     b.adjust(2)
     return b.as_markup()
 
 
-def kb_duel_result_actions(opponent_id: int) -> InlineKeyboardMarkup:
+def kb_duel_result_actions(opponent_id: int, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="Реванш", callback_data=f"duel_rematch:{int(opponent_id)}")
-    b.button(text="Коллекция", callback_data="collection")
+    b.button(text=t(lang, "rematch"), callback_data=f"duel_rematch:{int(opponent_id)}")
+    b.button(text=t(lang, "collection"), callback_data="collection")
     b.adjust(2)
     return b.as_markup()
 
 
-def kb_profile_actions(energy: int) -> InlineKeyboardMarkup:
+def kb_profile_actions(energy: int, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     if energy > 0:
-        b.button(text=f"Ежедневная энергия: ⚡️ {energy}/3 • Потратить", callback_data="e")
+        b.button(text=t(lang, "daily_energy_spend", energy=energy), callback_data="e")
     else:
-        b.button(text="Ежедневная энергия: ⚡️ 0/3", callback_data="e")
-    b.button(text="Коллекция", callback_data="collection")
-    b.button(text="Схватка с другом", callback_data="pvp")
+        b.button(text=t(lang, "daily_energy", energy=0), callback_data="e")
+    b.button(text=t(lang, "collection"), callback_data="collection")
+    b.button(text=t(lang, "battle_with_friend"), callback_data="pvp")
     b.adjust(1)
     return b.as_markup()
 
 
-def kb_no_chips(energy: int) -> InlineKeyboardMarkup:
+def kb_no_chips(energy: int, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     if energy > 0:
-        b.button(text=f"Ежедневная энергия: ⚡️ {energy}/3 • Потратить", callback_data="e")
+        b.button(text=t(lang, "daily_energy_spend", energy=energy), callback_data="e")
     else:
-        b.button(text="Ежедневная энергия: ⚡️ 0/3", callback_data="e")
-    b.button(text="Коллекция", callback_data="collection")
+        b.button(text=t(lang, "daily_energy", energy=0), callback_data="e")
+    b.button(text=t(lang, "collection"), callback_data="collection")
     b.adjust(1)
     return b.as_markup()
 
 
-def kb_duel_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int]) -> InlineKeyboardMarkup:
+def kb_duel_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int], lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     total_energy = 0
     for idx, (file_id, total) in enumerate(inv_items):
@@ -74,27 +76,27 @@ def kb_duel_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int]) -> In
         mark = " ✅" if cur else ""
         b.button(text=f"№{idx+1} · ⚡️{total}{mark}", callback_data=f"duel_pick_toggle:{idx}")
     b.adjust(3)
-    b.row(InlineKeyboardButton(text=f"Создать вызов (⚡️{total_energy})", callback_data="duel_create"))
-    b.row(InlineKeyboardButton(text="Отмена", callback_data="duel_cancel"))
+    b.row(InlineKeyboardButton(text=t(lang, "create_challenge", energy=total_energy), callback_data="duel_create"))
+    b.row(InlineKeyboardButton(text=t(lang, "button_cancel"), callback_data="duel_cancel"))
     return b.as_markup()
 
 
-def kb_duel_offer(duel_id: str) -> InlineKeyboardMarkup:
+def kb_duel_offer(duel_id: str, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="Принять", callback_data=f"duel_accept:{duel_id}")
-    b.button(text="Отказаться", callback_data=f"duel_decline:{duel_id}")
+    b.button(text=t(lang, "accept"), callback_data=f"duel_accept:{duel_id}")
+    b.button(text=t(lang, "decline"), callback_data=f"duel_decline:{duel_id}")
     b.adjust(1)
     return b.as_markup()
 
 
-def kb_share_duel(invite_text: str) -> InlineKeyboardMarkup:
+def kb_share_duel(invite_text: str, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.row(InlineKeyboardButton(text="Переслать ссылку на бой", switch_inline_query=invite_text))
-    b.row(InlineKeyboardButton(text="Отмена", callback_data="duel_share_cancel"))
+    b.row(InlineKeyboardButton(text=t(lang, "forward_battle_link"), switch_inline_query=invite_text))
+    b.row(InlineKeyboardButton(text=t(lang, "button_cancel"), callback_data="duel_share_cancel"))
     return b.as_markup()
 
 
-def kb_duel_accept_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int], target_energy: int, duel_id: str) -> InlineKeyboardMarkup:
+def kb_duel_accept_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int], target_energy: int, duel_id: str, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     total_energy = 0
     for idx, (file_id, total) in enumerate(inv_items):
@@ -105,20 +107,20 @@ def kb_duel_accept_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int]
         b.button(text=f"№{idx+1} · ⚡️{total}{mark}", callback_data=f"duel2_pick_toggle:{idx}")
     b.adjust(3)
     can_accept = (total_energy == int(target_energy))
-    b.row(InlineKeyboardButton(text=f"Принять бой ({total_energy}/{target_energy})", callback_data=(f"duel_accept_go:{duel_id}" if can_accept else "noop")))
-    b.row(InlineKeyboardButton(text="Отмена", callback_data=f"duel_accept_cancel:{duel_id}"))
+    b.row(InlineKeyboardButton(text=t(lang, "accept_battle", current=total_energy, target=target_energy), callback_data=(f"duel_accept_go:{duel_id}" if can_accept else "noop")))
+    b.row(InlineKeyboardButton(text=t(lang, "button_cancel"), callback_data=f"duel_accept_cancel:{duel_id}"))
     return b.as_markup()
 
 
-def kb_setup_confirm(can_confirm: bool) -> InlineKeyboardMarkup:
+def kb_setup_confirm(can_confirm: bool, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="Готово", callback_data=("setup_done" if can_confirm else "setup_done_disabled"))
-    b.button(text="Отмена", callback_data="setup_cancel")
+    b.button(text=t(lang, "ready"), callback_data=("setup_done" if can_confirm else "setup_done_disabled"))
+    b.button(text=t(lang, "button_cancel"), callback_data="setup_cancel")
     b.adjust(1)
     return b.as_markup()
 
 
-def kb_battle_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int], required: int = 3) -> InlineKeyboardMarkup:
+def kb_battle_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int], lang: str, required: int = 3) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     total_energy = 0
     for idx, (file_id, total) in enumerate(inv_items):
@@ -128,22 +130,22 @@ def kb_battle_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int], req
         mark = " ✅" if cur else ""
         b.button(text=f"№{idx+1} · ⚡️{total}{mark}", callback_data=f"pick_toggle:{idx}")
     b.adjust(3)
-    b.row(InlineKeyboardButton(text=f"Начать схватку (⚡️{total_energy})", callback_data="battle_go"))
-    b.row(InlineKeyboardButton(text="Отмена", callback_data="battle_cancel"))
+    b.row(InlineKeyboardButton(text=t(lang, "start_battle", energy=total_energy), callback_data="battle_go"))
+    b.row(InlineKeyboardButton(text=t(lang, "button_cancel"), callback_data="battle_cancel"))
     return b.as_markup()
 
 
-def kb_energy_menu(energy: int) -> InlineKeyboardMarkup:
+def kb_energy_menu(energy: int, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     b.button(text=f"⚡️ {energy}/3", callback_data="noop")
-    b.button(text="Прокачать существующие фишки", callback_data="eu")
-    b.button(text="Добавить новую фишку", callback_data="ea")
-    b.button(text="Назад", callback_data="collection")
+    b.button(text=t(lang, "upgrade_existing_chips"), callback_data="eu")
+    b.button(text=t(lang, "add_new_chip"), callback_data="ea")
+    b.button(text=t(lang, "back"), callback_data="collection")
     b.adjust(1)
     return b.as_markup()
 
 
-def kb_energy_upgrade(inv_items: List[Tuple[str, int]], spend: Dict[str, int], energy: int) -> InlineKeyboardMarkup:
+def kb_energy_upgrade(inv_items: List[Tuple[str, int]], spend: Dict[str, int], energy: int, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     used = sum(int(x) for x in spend.values())
     for idx, (file_id, total) in enumerate(inv_items):
@@ -151,15 +153,15 @@ def kb_energy_upgrade(inv_items: List[Tuple[str, int]], spend: Dict[str, int], e
         mark = f" +{add}" if add > 0 else ""
         b.button(text=f"№{idx+1} · ⚡{total}{mark} ＋", callback_data=f"eu+:{idx}")
     b.adjust(3)
-    b.row(InlineKeyboardButton(text=f"Применить ({used}/{energy})", callback_data="eu_go"))
-    b.row(InlineKeyboardButton(text="Отмена", callback_data="eu_cancel"))
+    b.row(InlineKeyboardButton(text=t(lang, "upgrade_apply", used=used, energy=energy), callback_data="eu_go"))
+    b.row(InlineKeyboardButton(text=t(lang, "button_cancel"), callback_data="eu_cancel"))
     return b.as_markup()
 
 
-def kb_reset_confirm() -> InlineKeyboardMarkup:
+def kb_reset_confirm(lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text="Да, сбросить", callback_data="reset_ok")
-    b.button(text="Отмена", callback_data="reset_no")
+    b.button(text=t(lang, "reset_confirm"), callback_data="reset_ok")
+    b.button(text=t(lang, "button_cancel"), callback_data="reset_no")
     b.adjust(1)
     return b.as_markup()
 
