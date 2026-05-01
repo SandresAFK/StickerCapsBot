@@ -9,7 +9,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 def kb_start(no_chips: bool) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     if no_chips:
-        b.button(text="Настроить фишки", callback_data="setup")
+        b.button(text="Выбрать любимые стикеры", callback_data="setup")
+        b.button(text="Использовать стикеры по умолчанию", callback_data="setup_default")
     else:
         b.button(text="Коллекция", callback_data="collection")
         b.button(text="Схватка с другом", callback_data="pvp")
@@ -27,6 +28,14 @@ def kb_collection_only() -> InlineKeyboardMarkup:
 def kb_result_actions() -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     b.button(text="Реванш", callback_data="pvp")
+    b.button(text="Коллекция", callback_data="collection")
+    b.adjust(2)
+    return b.as_markup()
+
+
+def kb_duel_result_actions(opponent_id: int) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.button(text="Реванш", callback_data=f"duel_rematch:{int(opponent_id)}")
     b.button(text="Коллекция", callback_data="collection")
     b.adjust(2)
     return b.as_markup()

@@ -14,7 +14,7 @@ from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message
 
 from app.config import Config, load_config
 from app.db import Database
-from app.keyboards import kb_battle_pick, kb_duel_accept_pick, kb_duel_offer, kb_duel_pick, kb_energy_menu, kb_energy_upgrade, kb_no_chips, kb_profile_actions, kb_reset_confirm, kb_result_actions, kb_setup_confirm, kb_share_duel, kb_start
+from app.keyboards import kb_battle_pick, kb_duel_accept_pick, kb_duel_offer, kb_duel_pick, kb_duel_result_actions, kb_energy_menu, kb_energy_upgrade, kb_no_chips, kb_profile_actions, kb_reset_confirm, kb_result_actions, kb_setup_confirm, kb_share_duel, kb_start
 from app.middleware import DI
 from app.render.profile import RenderSticker, render_battle_result, render_duel_result, render_profile
 from app.services.avatars import AvatarCache
@@ -204,7 +204,45 @@ async def cb_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, c
         return
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
     await state.set_state(DuelCreate.picking)
-    await state.update_data(picked={}, inv_order=[k for k, _ in inv_items])
+    await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=0)
+
+    paths: Dict[str, str] = {}
+    for file_id, _ in inv_items:
+        try:
+            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
+        except Exception:
+            pass
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
+    render_profile(user_title=_display_name(cb), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out)
+    pic = FSInputFile(out)
+    caption = "выберите фишки кнопками"
+    if cb.message:
+        try:
+            await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=caption), reply_markup=kb_duel_pick(inv_items, picked={}))
+        except Exception:
+            await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}))
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("duel_rematch:"))
+async def cb_duel_rematch(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache) -> None:
+    await _loading(cb)
+    try:
+        opponent_id = int(cb.data.split(":", 1)[1])
+    except Exception:
+        await cb.answer("Кнопка устарела.", show_alert=False)
+        return
+    if opponent_id == cb.from_user.id:
+        await cb.answer("Нельзя вызвать самого себя.", show_alert=False)
+        return
+
+    inv = await db.get_inventory(cb.from_user.id)
+    if not inv:
+        await cb.answer("Сначала настрой фишки.", show_alert=False)
+        return
+    inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
+    await state.set_state(DuelCreate.picking)
+    await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=opponent_id)
 
     paths: Dict[str, str] = {}
     for file_id, _ in inv_items:
@@ -277,12 +315,25 @@ async def cb_duel_create(cb: CallbackQuery, state: FSMContext, db: Database, bot
     target_energy = sum(int(inv.get(fid, 1)) for fid in picked.keys())
     duel_id = secrets.token_urlsafe(6).replace("-", "").replace("_", "")
     await db.create_duel(duel_id, cb.from_user.id, list(picked.keys()), target_energy)
-    me = await bot.get_me()
-    link = f"https://t.me/{me.username}?start=duel_{duel_id}"
+    rematch_opponent_id = int(data.get("rematch_opponent_id") or 0)
     await state.clear()
-    inviter = _display_name(cb)
-    invite_text = f"Тебя вызвал на бой {inviter} в игре Sticker CapsBot!\nНажми, чтобы принять бой: {link}"
-    await cb.message.answer(f"Ссылка на бой:\n{link}", reply_markup=kb_share_duel(invite_text))
+    if rematch_opponent_id > 0:
+        try:
+            await _send_duel_offer_to_user(rematch_opponent_id, duel_id=duel_id, db=db, bot=bot, cache=cache, avatars=avatars)
+            await cb.message.answer("Приглашение на реванш отправлено сопернику в личку.")
+        except Exception:
+            me = await bot.get_me()
+            link = f"https://t.me/{me.username}?start=duel_{duel_id}"
+            inviter = _display_name(cb)
+            invite_text = f"Тебя вызвал на бой {inviter} в игре Sticker CapsBot!\nНажми, чтобы принять бой: {link}"
+            await cb.message.answer("Не удалось написать сопернику напрямую. Отправь ему ссылку на реванш:", reply_markup=kb_share_duel(invite_text))
+            await cb.message.answer(link)
+    else:
+        me = await bot.get_me()
+        link = f"https://t.me/{me.username}?start=duel_{duel_id}"
+        inviter = _display_name(cb)
+        invite_text = f"Тебя вызвал на бой {inviter} в игре Sticker CapsBot!\nНажми, чтобы принять бой: {link}"
+        await cb.message.answer(f"Ссылка на бой:\n{link}", reply_markup=kb_share_duel(invite_text))
     await cb.answer()
 
 
@@ -523,8 +574,8 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
         out_path=out_op,
     )
 
-    await bot.send_photo(chat_id=creator_id, photo=FSInputFile(out_creator), caption="", reply_markup=kb_result_actions())
-    await bot.send_photo(chat_id=cb.from_user.id, photo=FSInputFile(out_op), caption="", reply_markup=kb_result_actions())
+    await bot.send_photo(chat_id=creator_id, photo=FSInputFile(out_creator), caption="", reply_markup=kb_duel_result_actions(cb.from_user.id))
+    await bot.send_photo(chat_id=cb.from_user.id, photo=FSInputFile(out_op), caption="", reply_markup=kb_duel_result_actions(creator_id))
 
     await state.clear()
     await cb.answer("Бой завершён.")
@@ -577,12 +628,77 @@ async def _show_duel_offer(message: Message, *, duel_id: str, db: Database, bot:
     await message.answer_photo(FSInputFile(out), caption="", reply_markup=kb_duel_offer(duel_id))
 
 
+async def _send_duel_offer_to_user(user_id: int, *, duel_id: str, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
+    duel = await db.get_duel(duel_id)
+    if not duel or duel.get("status") != "open":
+        return
+    creator_id = int(duel["creator_id"])
+    creator_pick: list[str] = list(duel.get("creator_pick") or [])
+    target_energy = int(duel.get("target_energy") or 0)
+
+    try:
+        c_chat = await bot.get_chat(creator_id)
+        creator_name = (f"@{c_chat.username}" if getattr(c_chat, "username", None) else (getattr(c_chat, "full_name", None) or str(creator_id)))
+    except Exception:
+        creator_name = str(creator_id)
+
+    inv_creator = await db.get_inventory(creator_id)
+    paths: Dict[str, str] = {}
+    for file_id in creator_pick:
+        try:
+            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
+        except Exception:
+            pass
+    won = [RenderSticker(file_id=fid, path=paths[fid], count=int(inv_creator.get(fid, 1))) for fid in creator_pick if fid in paths]
+
+    creator_avatar = None
+    try:
+        creator_avatar = await avatars.get_avatar_path(bot, creator_id)
+    except Exception:
+        pass
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_offer_{creator_id}_{duel_id}_{user_id}.png")
+    render_battle_result(
+        title="",
+        user_title=f"Дуэль vs {creator_name}",
+        avatar_path=creator_avatar,
+        lost=[],
+        won=won,
+        out_path=out,
+        top_label="Нападающий -",
+        show_bottom=False,
+        header_energy=target_energy,
+    )
+    await bot.send_photo(chat_id=user_id, photo=FSInputFile(out), caption="", reply_markup=kb_duel_offer(duel_id))
+
+
 @router.callback_query(F.data == "setup")
 async def cb_setup(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(SetupChips.waiting_stickers)
     await state.update_data(stickers=[])
     await cb.message.answer("Отправь 3 любых стикера и нажми «Готово».")
     await cb.answer()
+
+
+@router.callback_query(F.data == "setup_default")
+async def cb_setup_default(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache, cfg) -> None:
+    await _loading(cb)
+    await state.clear()
+    try:
+        file_ids = await pick_enemy_stickers(bot, cfg.default_sticker_set_name, n=3)
+        file_ids = [str(x) for x in (file_ids or [])][:3]
+        if len(file_ids) != 3:
+            raise RuntimeError("not enough default stickers")
+        await db.set_inventory_exact(cb.from_user.id, counts_from_list(file_ids))
+        await db.set_setup_done(cb.from_user.id, 1)
+        await cb.message.answer("Готово! Выданы 3 фишки по умолчанию.")
+        await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id, edit_in_place=False)
+        await cb.answer()
+    except Exception:
+        await cb.answer("Не удалось выдать фишки по умолчанию. Выбери любимые стикеры.", show_alert=False)
+        try:
+            await cb.message.answer("Не удалось выдать фишки по умолчанию. Нажми «Выбрать любимые стикеры».")
+        except Exception:
+            pass
 
 
 def _static_sticker_id(sticker) -> str:
