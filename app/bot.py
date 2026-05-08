@@ -15,14 +15,14 @@ from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message
 from app.config import Config, load_config
 from app.db import Database
 from app.i18n import get_event_lang, t
-from app.keyboards import kb_battle_pick, kb_duel_accept_pick, kb_duel_offer, kb_duel_pick, kb_duel_result_actions, kb_energy_menu, kb_energy_upgrade, kb_no_chips, kb_profile_actions, kb_reset_confirm, kb_result_actions, kb_setup_confirm, kb_share_duel, kb_start
+from app.keyboards import kb_battle_pick, kb_duel_accept_pick, kb_duel_offer, kb_duel_pick, kb_duel_result_actions, kb_ea_collect, kb_energy_menu, kb_energy_upgrade, kb_matchmaking_pick, kb_matchmaking_result, kb_no_chips, kb_profile_actions, kb_reset_confirm, kb_result_actions, kb_setup_confirm, kb_share_duel, kb_start
 from app.middleware import DI
 from app.render.profile import RenderSticker, render_battle_result, render_duel_result, render_profile
 from app.services.avatars import AvatarCache
 from app.services.battle import BattleUnit, counts_from_list, distribute_by_slot, run_battle
 from app.services.energy import MAX_ENERGY, get_user_with_regen, seconds_until_next_utc_midnight, utc_midnight_ts
 from app.services.stickers import StickerCache, pick_enemy_stickers
-from app.states import BattlePick, DuelAccept, DuelCreate, EnergySpend, SetupChips
+from app.states import BattlePick, DuelAccept, DuelCreate, EnergySpend, MatchmakingPick, SetupChips
 
 router = Router()
 
@@ -113,6 +113,10 @@ def _display_name(obj: Message | CallbackQuery, lang: str | None = None) -> str:
     if u.username:
         return f"@{u.username}"
     return u.full_name or t(current_lang, "player_by_id", user_id=u.id)
+
+
+def _battle_score_title(my_slot: int, their_slot: int) -> str:
+    return f"{my_slot} vs {their_slot}"
 
 
 async def _display_name_by_id(bot: Bot, user_id: int, lang: str = "en") -> str:
@@ -317,6 +321,23 @@ async def _update_duel_pick(cb: CallbackQuery, state: FSMContext, db: Database, 
 @router.callback_query(DuelCreate.picking, F.data.startswith("duel_pick_toggle:"))
 async def cb_duel_pick_toggle(cb: CallbackQuery, state: FSMContext, db: Database) -> None:
     await _update_duel_pick(cb, state, db, True, "duel1")
+
+
+@router.callback_query(DuelCreate.picking, F.data == "duel_pick_all")
+async def cb_duel_pick_all(cb: CallbackQuery, state: FSMContext, db: Database) -> None:
+    lang = get_event_lang(cb)
+    inv = await db.get_inventory(cb.from_user.id)
+    inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
+    data = await state.get_data()
+    picked: Dict[str, int] = dict(data.get("picked", {}))
+    all_selected = all(int(picked.get(fid, 0)) > 0 for fid, _ in inv_items)
+    if all_selected:
+        picked = {}
+    else:
+        picked = {fid: 1 for fid, cnt in inv_items if int(cnt) > 0}
+    await state.update_data(picked=picked)
+    await cb.message.edit_reply_markup(reply_markup=kb_duel_pick(inv_items, picked, lang=lang))
+    await cb.answer()
 
 
 @router.callback_query(DuelCreate.picking, F.data == "duel_cancel")
@@ -583,11 +604,10 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
 
     creator_lang = await _user_lang(db, creator_id)
     render_duel_result(
-        title=f"{creator_slot} vs {opponent_slot}",
-        user_title=f"{creator_name} vs {opponent_name}",
+        title=_battle_score_title(creator_slot, opponent_slot),
+        user_title=creator_name,
+        opponent_title=opponent_name,
         avatar_path=None,
-        attacker_label=t(creator_lang, "attacker_label_you", name=creator_name),
-        defender_label=t(creator_lang, "defender_label_name", name=opponent_name),
         attacker_delta=creator_delta,
         defender_delta=opponent_delta,
         attacker_gained=attacker_gained,
@@ -596,15 +616,14 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
         lang=creator_lang,
     )
     render_duel_result(
-        title=f"{creator_slot} vs {opponent_slot}",
-        user_title=f"{creator_name} vs {opponent_name}",
+        title=_battle_score_title(opponent_slot, creator_slot),
+        user_title=opponent_name,
+        opponent_title=creator_name,
         avatar_path=None,
-        attacker_label=t(lang, "attacker_label_name", name=creator_name),
-        defender_label=t(lang, "defender_label_you", name=opponent_name),
-        attacker_delta=creator_delta,
-        defender_delta=opponent_delta,
-        attacker_gained=attacker_gained,
-        defender_gained=defender_gained,
+        attacker_delta=opponent_delta,
+        defender_delta=creator_delta,
+        attacker_gained=defender_gained,
+        defender_gained=attacker_gained,
         out_path=out_op,
         lang=lang,
     )
@@ -859,6 +878,23 @@ async def cb_pick_toggle(cb: CallbackQuery, state: FSMContext, db: Database) -> 
     await _update_pick(cb, state, db, True)
 
 
+@router.callback_query(BattlePick.picking, F.data == "pick_all")
+async def cb_pick_all(cb: CallbackQuery, state: FSMContext, db: Database) -> None:
+    lang = get_event_lang(cb)
+    inv = await db.get_inventory(cb.from_user.id)
+    inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
+    data = await state.get_data()
+    picked: Dict[str, int] = dict(data.get("picked", {}))
+    all_selected = all(int(picked.get(fid, 0)) > 0 for fid, _ in inv_items)
+    if all_selected:
+        picked = {}
+    else:
+        picked = {fid: 1 for fid, cnt in inv_items if int(cnt) > 0}
+    await state.update_data(picked=picked)
+    await cb.message.edit_reply_markup(reply_markup=kb_battle_pick(inv_items, picked, lang=lang))
+    await cb.answer()
+
+
 @router.callback_query(BattlePick.picking, F.data == "battle_cancel")
 async def cb_battle_cancel(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
     await state.clear()
@@ -871,14 +907,6 @@ async def cb_battle_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
     await _loading(cb)
     lang = get_event_lang(cb)
     user = await get_user_with_regen(db, cb.from_user.id)
-    if user.energy <= 0:
-        inv0 = await db.get_inventory(cb.from_user.id)
-        if not inv0:
-            await cb.message.answer(_no_energy_and_chips_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
-        else:
-            await cb.message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
-        await cb.answer(t(lang, "no_energy"), show_alert=False)
-        return
     inv = await db.get_inventory(cb.from_user.id)
     data = await state.get_data()
     picked: Dict[str, int] = dict(data.get("picked", {}))
@@ -888,7 +916,6 @@ async def cb_battle_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
         await cb.answer(t(lang, "choose_at_least_one_chip"), show_alert=False)
         return
 
-    await db.update_energy(cb.from_user.id, user.energy - 1, updated_at=int(time.time()))
     player_units: list[BattleUnit] = []
     for fid in picked.keys():
         player_units.append(BattleUnit(file_id=fid, nominal=int(inv.get(fid, 1))))
@@ -940,6 +967,185 @@ async def cb_battle_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
     render_battle_result(title=t(lang, "battle_result_title"), user_title=_display_name(cb, lang), avatar_path=avatar, lost=lost, won=won, out_path=out, lang=lang)
     await state.clear()
     await cb.message.answer_photo(FSInputFile(out), caption="", reply_markup=kb_result_actions(lang=lang))
+
+
+MEME_OPPONENTS = [
+    "PepeTheFrog", "GigaChad420", "DogeMaster777", "KermitVibes99",
+    "MLG_Quickscoper", "NyanCat2077", "SadFrog_irl", "BasedLord",
+    "MemeKing777", "TrollFace2000", "SkibidiToilet", "GrumpyCat",
+    "DankMemer69", "WojakPro", "StonksGuy", "ThisIsFine_Dog",
+    "PepoHappy", "MonkaS_Gaming", "BigBrain200IQ", "ChadMindset",
+    "ClownWorld42", "BrainwormBob", "CopiumKing", "TouchGrass_Bot",
+    "NPC_Enjoyer", "RatioMaster", "VibeCheck_Pro", "YesChad",
+    "GigaNerd", "FeelsWeirdMan", "OmegaLUL", "PauseChamp",
+]
+
+_BOWLING_PINS: dict[int, int] = {1: 0, 2: 1, 3: 3, 4: 4, 5: 5, 6: 6}
+
+
+@router.callback_query(F.data == "mm")
+async def cb_matchmaking(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
+    await _loading(cb)
+    lang = get_event_lang(cb)
+    user = await get_user_with_regen(db, cb.from_user.id)
+    inv = await db.get_inventory(cb.from_user.id)
+    if not inv:
+        await cb.answer(t(lang, "setup_first"), show_alert=False)
+        return
+    inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
+    await state.set_state(MatchmakingPick.picking)
+    await state.update_data(picked={}, inv_order=[k for k, _ in inv_items])
+    paths: Dict[str, str] = {}
+    for file_id, _ in inv_items:
+        try:
+            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
+        except Exception:
+            pass
+    out = os.path.join(os.getcwd(), "data", "renders", f"mm_pick_{cb.from_user.id}.png")
+    render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    pic = FSInputFile(out)
+    try:
+        await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=t(lang, "collection")), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
+    except Exception:
+        await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
+    await cb.answer()
+
+
+@router.callback_query(MatchmakingPick.picking, F.data.startswith("mm_pick_toggle:"))
+async def cb_mm_pick_toggle(cb: CallbackQuery, state: FSMContext, db: Database) -> None:
+    lang = get_event_lang(cb)
+    inv = await db.get_inventory(cb.from_user.id)
+    inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
+    data = await state.get_data()
+    picked: Dict[str, int] = dict(data.get("picked", {}))
+    inv_order: list[str] = list(data.get("inv_order", []))
+    try:
+        idx = int(cb.data.split(":", 1)[1])
+        file_id = inv_order[idx]
+    except Exception:
+        await cb.answer(t(lang, "stale_button"), show_alert=False)
+        return
+    cur = int(picked.get(file_id, 0))
+    if cur > 0:
+        picked.pop(file_id, None)
+    else:
+        if file_id in inv and int(inv[file_id]) > 0:
+            picked[file_id] = 1
+    await state.update_data(picked=picked)
+    await cb.message.edit_reply_markup(reply_markup=kb_matchmaking_pick(inv_items, picked, lang=lang))
+    await cb.answer()
+
+
+@router.callback_query(MatchmakingPick.picking, F.data == "mm_cancel")
+async def cb_mm_cancel(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
+    await state.clear()
+    await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id, edit_in_place=True)
+    await cb.answer()
+
+
+@router.callback_query(MatchmakingPick.picking, F.data == "mm_go")
+async def cb_mm_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache, cfg) -> None:
+    await _loading(cb)
+    lang = get_event_lang(cb)
+    user = await get_user_with_regen(db, cb.from_user.id)
+    inv = await db.get_inventory(cb.from_user.id)
+    data = await state.get_data()
+    picked: Dict[str, int] = dict(data.get("picked", {}))
+    picked = {k: min(int(v), int(inv.get(k, 0))) for k, v in picked.items() if int(v) > 0 and int(inv.get(k, 0)) > 0}
+    if not picked:
+        await cb.answer(t(lang, "choose_at_least_one_chip"), show_alert=False)
+        return
+
+    import random as _random
+    bot_name = _random.choice(MEME_OPPONENTS)
+
+    searching_msg = await cb.message.answer(t(lang, "mm_searching", count=3))
+    await asyncio.sleep(1)
+    try:
+        await searching_msg.edit_text(t(lang, "mm_searching", count=2))
+    except Exception:
+        pass
+    await asyncio.sleep(1)
+    try:
+        await searching_msg.edit_text(t(lang, "mm_searching", count=1))
+    except Exception:
+        pass
+    await asyncio.sleep(1)
+    try:
+        await searching_msg.edit_text(t(lang, "mm_found", name=bot_name))
+    except Exception:
+        pass
+
+    player_units: list[BattleUnit] = [BattleUnit(file_id=fid, nominal=int(inv.get(fid, 1))) for fid in picked]
+    try:
+        enemy_ids = await pick_enemy_stickers(bot, cfg.default_sticker_set_name, n=len(player_units))
+    except Exception:
+        pool = [fid for fid, cnt in inv.items() for _ in range(max(1, int(cnt)))]
+        enemy_ids = [_random.choice(pool) for _ in range(len(player_units))]
+    enemy_units: list[BattleUnit] = [
+        BattleUnit(file_id=enemy_ids[i % len(enemy_ids)], nominal=u.nominal)
+        for i, u in enumerate(player_units)
+    ]
+
+    await cb.message.answer(t(lang, "mm_your_roll"))
+    player_dice_msg = await bot.send_dice(chat_id=cb.from_user.id, emoji="🎳")
+    await asyncio.sleep(1)
+    await cb.message.answer(t(lang, "mm_bot_roll", name=bot_name))
+    bot_dice_msg = await bot.send_dice(chat_id=cb.from_user.id, emoji="🎳")
+    await asyncio.sleep(4)
+
+    player_slot = _BOWLING_PINS.get(player_dice_msg.dice.value, player_dice_msg.dice.value)
+    bot_slot = _BOWLING_PINS.get(bot_dice_msg.dice.value, bot_dice_msg.dice.value)
+
+    result = distribute_by_slot(player_units, enemy_units, player_slot, bot_slot)
+
+    player_ids = set(u.file_id for u in player_units)
+    enemy_ids_set = set(u.file_id for u in enemy_units)
+    player_gained = [u for u in result.player_won if u.file_id in enemy_ids_set]
+    bot_gained = [u for u in result.enemy_won if u.file_id in player_ids]
+    player_delta = sum(u.nominal for u in result.player_won) - sum(u.nominal for u in player_units)
+    bot_delta = sum(u.nominal for u in result.enemy_won) - sum(u.nominal for u in enemy_units)
+
+    stake_player = set(u.file_id for u in player_units)
+    stake_enemy = set(u.file_id for u in enemy_units)
+    new_inv: Dict[str, int] = {k: int(v) for k, v in inv.items() if k not in stake_player}
+    for u in result.player_won:
+        new_inv[u.file_id] = int(new_inv.get(u.file_id, 0)) + int(u.nominal)
+    await db.set_inventory_exact(cb.from_user.id, new_inv)
+    await db.increment_mm_games(cb.from_user.id)
+
+    if not new_inv:
+        try:
+            await _notify_user_no_chips(bot=bot, db=db, user_id=cb.from_user.id)
+        except Exception:
+            pass
+
+    paths: Dict[str, str] = {}
+    for file_id in set([u.file_id for u in player_gained] + [u.file_id for u in bot_gained]):
+        try:
+            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
+        except Exception:
+            pass
+    attacker_gained_r = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in player_gained if u.file_id in paths]
+    defender_gained_r = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in bot_gained if u.file_id in paths]
+
+    ts = int(time.time())
+    out = os.path.join(os.getcwd(), "data", "renders", f"mm_result_{cb.from_user.id}_{ts}.png")
+    avatar = await avatars.get_avatar_path(bot, cb.from_user.id)
+    render_duel_result(
+        title=_battle_score_title(player_slot, bot_slot),
+        user_title=_display_name(cb, lang),
+        opponent_title=bot_name,
+        avatar_path=avatar,
+        attacker_delta=player_delta,
+        defender_delta=bot_delta,
+        attacker_gained=attacker_gained_r,
+        defender_gained=defender_gained_r,
+        out_path=out,
+        lang=lang,
+    )
+    await state.clear()
+    await cb.message.answer_photo(FSInputFile(out), caption="", reply_markup=kb_matchmaking_result(lang=lang))
 
 
 @router.callback_query(F.data == "e")
@@ -1051,19 +1257,22 @@ async def cb_ea(cb: CallbackQuery, state: FSMContext, db: Database) -> None:
         await cb.answer(t(lang, "no_energy"), show_alert=False)
         return
     await state.set_state(EnergySpend.add_sticker)
-    await cb.message.answer(t(lang, "send_sticker_to_add"))
+    await state.update_data(ea_pending=[], ea_max=user.energy)
+    await cb.message.answer(t(lang, "ea_prompt", energy=user.energy), reply_markup=kb_ea_collect(0, user.energy, lang))
     await cb.answer()
 
 
 @router.message(EnergySpend.add_sticker)
-async def on_ea_sticker(message: Message, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
+async def on_ea_sticker(message: Message, state: FSMContext, db: Database, bot: Bot, cache: StickerCache) -> None:
     lang = get_event_lang(message)
-    user = await get_user_with_regen(db, message.from_user.id)
-    if user.energy <= 0:
-        await message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
-        return
     if message.content_type != ContentType.STICKER or message.sticker is None:
         await message.answer(t(lang, "need_sticker"))
+        return
+    data = await state.get_data()
+    pending: list[str] = list(data.get("ea_pending", []))
+    max_e: int = int(data.get("ea_max", 1))
+    if len(pending) >= max_e:
+        await message.answer(t(lang, "ea_full", max=max_e), reply_markup=kb_ea_collect(len(pending), max_e, lang))
         return
     file_id = _static_sticker_id(message.sticker)
     try:
@@ -1071,11 +1280,39 @@ async def on_ea_sticker(message: Message, state: FSMContext, db: Database, bot: 
     except Exception:
         await message.answer(t(lang, "sticker_unavailable"))
         return
-    await db.add_inventory(message.from_user.id, {file_id: 1})
-    await db.update_energy(message.from_user.id, user.energy - 1, updated_at=int(time.time()))
+    pending.append(file_id)
+    await state.update_data(ea_pending=pending)
+    if len(pending) >= max_e:
+        await message.answer(t(lang, "ea_full", max=max_e), reply_markup=kb_ea_collect(len(pending), max_e, lang))
+    else:
+        await message.answer(t(lang, "ea_progress", count=len(pending), max=max_e), reply_markup=kb_ea_collect(len(pending), max_e, lang))
+
+
+@router.callback_query(EnergySpend.add_sticker, F.data == "ea_confirm")
+async def cb_ea_confirm(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
+    lang = get_event_lang(cb)
+    data = await state.get_data()
+    pending: list[str] = list(data.get("ea_pending", []))
+    if not pending:
+        await cb.answer(t(lang, "nothing_to_apply"), show_alert=False)
+        return
+    user = await get_user_with_regen(db, cb.from_user.id)
+    if len(pending) > user.energy:
+        await cb.answer(t(lang, "not_enough_energy"), show_alert=False)
+        return
+    await db.add_inventory(cb.from_user.id, counts_from_list(pending))
+    await db.update_energy(cb.from_user.id, user.energy - len(pending), updated_at=int(time.time()))
     await state.clear()
-    await message.answer(t(lang, "sticker_added"))
-    await _render_and_send_profile(message, bot=bot, db=db, cache=cache, avatars=avatars, user_id=message.from_user.id)
+    await cb.message.answer(t(lang, "ea_done"))
+    await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id)
+    await cb.answer()
+
+
+@router.callback_query(EnergySpend.add_sticker, F.data == "ea_cancel")
+async def cb_ea_cancel(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
+    await state.clear()
+    await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id, edit_in_place=False)
+    await cb.answer()
 
 
 @router.callback_query(F.data == "reset")
@@ -1099,6 +1336,29 @@ async def cb_reset_ok(cb: CallbackQuery, state: FSMContext, db: Database, bot: B
     await cb.answer()
 
 
+@router.callback_query(F.data == "leaderboard")
+async def cb_leaderboard(cb: CallbackQuery, db: Database, bot: Bot) -> None:
+    await _loading(cb)
+    lang = get_event_lang(cb)
+    stats = await db.get_all_users_stats()
+    if not stats:
+        await cb.answer(t(lang, "leaderboard_empty"), show_alert=True)
+        return
+    stats.sort(key=lambda s: (s["total_nominal"], s["duels_count"]), reverse=True)
+    top = stats[:15]
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    lines = [t(lang, "leaderboard_header")]
+    for rank, s in enumerate(top, 1):
+        name = await _display_name_by_id(bot, s["user_id"], lang)
+        prefix = medals.get(rank, f"#{rank}")
+        lines.append(
+            f"{prefix} {name}\n"
+            f"  🃏{s['chips_count']} ({s['total_nominal']}⚡) | ⚔️{s['duels_count']} | 🎮{s.get('mm_games', 0)}"
+        )
+    await cb.message.answer("\n".join(lines))
+    await cb.answer()
+
+
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, db: Database, cfg: Config, bot: Bot) -> None:
     lang = get_event_lang(message)
@@ -1109,13 +1369,15 @@ async def cmd_stats(message: Message, db: Database, cfg: Config, bot: Bot) -> No
         await message.answer(t(lang, "no_players"))
         return
     total_duels = sum(s["duels_count"] for s in stats)
+    total_mm = sum(s.get("mm_games", 0) for s in stats)
     total_nominal = sum(s["total_nominal"] for s in stats)
-    lines = [t(lang, "stats_header", players=len(stats), duels=total_duels, points=total_nominal)]
+    lines = [t(lang, "stats_header", players=len(stats), duels=total_duels, mm=total_mm, points=total_nominal)]
     for s in stats:
         setup = "✅" if s["setup_done"] else "⏳"
         name = await _display_name_by_id(bot, s["user_id"], lang)
         lines.append(
-            f"{name} | 🃏{s['chips_count']} ({s['total_nominal']}⚡) | ⚡{s['energy']} | ⚔️{s['duels_count']} | {setup}"
+            f"{name}\n"
+            f"  🃏{s['chips_count']} ({s['total_nominal']}⚡) | ⚡{s['energy']} | ⚔️{s['duels_count']} | 🎮{s.get('mm_games', 0)} | {setup}"
         )
     text = "\n".join(lines)
     for i in range(0, len(text), 4096):
