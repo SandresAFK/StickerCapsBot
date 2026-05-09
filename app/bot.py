@@ -1086,8 +1086,7 @@ async def cb_mm_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot,
         all_enemy_ids = list(inv.keys())
     enemy_units: list[BattleUnit] = []
     if total_energy > 0 and all_enemy_ids:
-        max_chips = min(total_energy, max(1, len(player_units) * 2))
-        n = _random.randint(1, max_chips)
+        n = _random.randint(1, total_energy)
         if n > 1 and total_energy > 1:
             cut_positions = sorted(_random.sample(range(1, total_energy), min(n - 1, total_energy - 1)))
         else:
