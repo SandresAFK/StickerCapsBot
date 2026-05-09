@@ -1077,15 +1077,24 @@ async def cb_mm_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot,
         pass
 
     player_units: list[BattleUnit] = [BattleUnit(file_id=fid, nominal=int(inv.get(fid, 1))) for fid in picked]
+    total_energy = sum(u.nominal for u in player_units)
     try:
-        enemy_ids = await pick_enemy_stickers(bot, cfg.default_sticker_set_name, n=len(player_units))
+        all_enemy_ids = await pick_enemy_stickers(bot, cfg.default_sticker_set_name, n=10)
     except Exception:
-        pool = [fid for fid, cnt in inv.items() for _ in range(max(1, int(cnt)))]
-        enemy_ids = [_random.choice(pool) for _ in range(len(player_units))]
-    enemy_units: list[BattleUnit] = [
-        BattleUnit(file_id=enemy_ids[i % len(enemy_ids)], nominal=u.nominal)
-        for i, u in enumerate(player_units)
-    ]
+        all_enemy_ids = [fid for fid, _ in inv.items()]
+    if not all_enemy_ids:
+        all_enemy_ids = list(inv.keys())
+    enemy_units: list[BattleUnit] = []
+    if total_energy > 0 and all_enemy_ids:
+        max_chips = min(total_energy, max(1, len(player_units) * 2))
+        n = _random.randint(1, max_chips)
+        if n > 1 and total_energy > 1:
+            cut_positions = sorted(_random.sample(range(1, total_energy), min(n - 1, total_energy - 1)))
+        else:
+            cut_positions = []
+        cuts = [0] + cut_positions + [total_energy]
+        nominals = [cuts[i + 1] - cuts[i] for i in range(len(cuts) - 1)]
+        enemy_units = [BattleUnit(file_id=_random.choice(all_enemy_ids), nominal=nom) for nom in nominals]
 
     await cb.message.answer(t(lang, "mm_your_roll"))
     player_dice_msg = await bot.send_dice(chat_id=cb.from_user.id, emoji="🎳")
