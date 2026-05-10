@@ -274,6 +274,111 @@ def _draw_chip(*, img: Image.Image, draw: ImageDraw.ImageDraw, sticker_path: str
     draw.text((tx - eb[0], ty - eb[1]), energy, font=font_energy, fill=(255, 255, 255, 255))
 
 
+def _draw_eagle(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, *, wings_up: bool = True) -> None:
+    H = size // 2
+    if wings_up:
+        fc = (236, 190, 63, 255)
+        dc = (165, 125, 25, 255)
+        hl = (255, 248, 200, 255)
+    else:
+        fc = (100, 104, 114, 255)
+        dc = (64, 68, 78, 255)
+        hl = (150, 155, 165, 255)
+
+    tip_dy = -H * 2 // 5 if wings_up else H * 2 // 5
+
+    # Body
+    bw = max(3, H // 5)
+    bh = max(6, H * 11 // 16)
+    body_cy = cy + H // 10
+    draw.ellipse((cx - bw, body_cy - bh, cx + bw, body_cy + bh), fill=fc)
+
+    # Head
+    hr = max(3, H // 4)
+    hcy = body_cy - bh - hr + 1
+    draw.ellipse((cx - hr, hcy - hr, cx + hr, hcy + hr), fill=fc)
+    # Beak
+    draw.polygon([(cx - hr, hcy - hr // 3), (cx - hr - H // 3, hcy - hr // 2),
+                  (cx - hr - H // 3, hcy + hr // 4)], fill=dc)
+
+    # Wing geometry: root at body, tip far left
+    tip_x = cx - H * 18 // 20
+    tip_y = body_cy + tip_dy
+    shldr_x = cx - H * 9 // 20
+    shldr_y = body_cy + tip_dy // 2
+
+    # Left wing main surface
+    lw_main = [
+        (cx - bw, body_cy - bh // 3),
+        (shldr_x, shldr_y - H // 5),
+        (tip_x + H // 4, tip_y - H // 8),
+        (tip_x, tip_y),
+        (tip_x + H // 4, tip_y + H // 8),
+        (shldr_x, shldr_y + H // 5),
+        (cx - bw, body_cy + bh // 4),
+    ]
+    draw.polygon(lw_main, fill=fc)
+
+    # Wing covert accent (darker inner band)
+    lw_cov = [
+        (cx - bw, body_cy - bh // 5),
+        (shldr_x, shldr_y - H // 8),
+        (shldr_x, shldr_y + H // 8),
+        (cx - bw, body_cy + bh // 6),
+    ]
+    draw.polygon(lw_cov, fill=dc)
+
+    # Wing tip feathers (5 finger feathers)
+    f_dirs = [(-2, -3), (-3, -1), (-4, 0), (-3, 1), (-2, 3)]
+    f_bases_y = [tip_y + i * H // 6 - H // 3 for i in range(5)]
+    f_base_x = tip_x + H // 5
+    for i, ((fdx, fdy), fby) in enumerate(zip(f_dirs, f_bases_y)):
+        fl = H * 2 // 5
+        dlen = (fdx * fdx + fdy * fdy) ** 0.5
+        ndx, ndy = fdx / dlen, fdy / dlen
+        px, py = -ndy, ndx
+        fw = max(1, H // 7)
+        fpts = [
+            (int(f_base_x + px * fw), int(fby + py * fw)),
+            (int(f_base_x - px * fw), int(fby - py * fw)),
+            (int(f_base_x + ndx * fl), int(fby + ndy * fl)),
+        ]
+        draw.polygon(fpts, fill=fc)
+
+    # Right wing (mirror all left wing elements)
+    draw.polygon([(2 * cx - x, y) for x, y in lw_main], fill=fc)
+    draw.polygon([(2 * cx - x, y) for x, y in lw_cov], fill=dc)
+    for i, ((fdx, fdy), fby) in enumerate(zip(f_dirs, f_bases_y)):
+        fl = H * 2 // 5
+        dlen = (fdx * fdx + fdy * fdy) ** 0.5
+        ndx, ndy = -fdx / dlen, fdy / dlen
+        px, py = -ndy, ndx
+        fw = max(1, H // 7)
+        f_base_xr = 2 * cx - f_base_x
+        fpts = [
+            (int(f_base_xr + px * fw), int(fby + py * fw)),
+            (int(f_base_xr - px * fw), int(fby - py * fw)),
+            (int(f_base_xr + ndx * fl), int(fby + ndy * fl)),
+        ]
+        draw.polygon(fpts, fill=fc)
+
+    # Tail fan (5 feathers)
+    t_top = body_cy + bh - H // 8
+    t_bot = body_cy + bh + H * 5 // 8
+    for i in range(5):
+        t = (i - 2) / 2.0
+        tw = max(1, H // 7)
+        tx_c = cx + int(t * H // 3)
+        draw.polygon([
+            (cx - tw, t_top), (cx + tw, t_top),
+            (int(tx_c + tw // 2), t_bot), (int(tx_c - tw // 2), t_bot),
+        ], fill=dc)
+
+    # Body highlight streak
+    draw.ellipse((cx - max(2, bw // 2), body_cy - bh // 2,
+                  cx + max(2, bw // 2), body_cy + bh // 4), fill=hl)
+
+
 def _draw_bowling_ball(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int) -> None:
     r = radius
     draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(40, 40, 50, 255))
@@ -401,9 +506,10 @@ def render_duel_result(
     *,
     title: str,
     user_title: str,
-    avatar_path: str | None,
-    attacker_label: str,
-    defender_label: str,
+    opponent_title: str = "",
+    avatar_path: str | None = None,
+    attacker_label: str = "",
+    defender_label: str = "",
     attacker_delta: int,
     defender_delta: int,
     attacker_gained: List[RenderSticker],
@@ -414,36 +520,57 @@ def render_duel_result(
     w = 900
     chip_sz, cols, chip_gap = 220, 3, 35
     PAD_L = 70
+    BALL_R = 14
+    C_WIN = (80, 200, 120, 255)
+    C_LOSE = (220, 80, 80, 255)
 
     def _grid_h(items: List[RenderSticker]) -> int:
         if not items:
-            return 40
+            return 44
         rows = (len(items) + cols - 1) // cols
         return rows * chip_sz + (rows - 1) * chip_gap
 
     ft = _load_font(40)
     fs = _load_font(28)
+    fvs = _load_font(30)
     fb = _load_font(24)
     fn = _load_font(24)
 
-    BALL_R = 14
-    title_lines = _wrap_text(user_title, ft, w - PAD_L - 40)
-    line_h = ft.size + 6
-    header_text_h = len(title_lines) * line_h + 10 + (fs.size + 4)
-    header_h = max(180, header_text_h + 60)
+    you_lbl = t(lang, "you_label")
+    vs_text = t(lang, "versus")
+    my_line = f"{user_title} {you_lbl}"
+    opp_lines = _wrap_text(opponent_title or "???", ft, w - PAD_L - 40)
 
-    ag_h = _grid_h(attacker_gained)
-    dg_h = _grid_h(defender_gained)
+    line_h_ft = ft.size + 6
+    line_h_vs = fvs.size + 8
+    score_line_h = BALL_R * 2 + 8
 
-    LABEL_H = 50
+    header_text_h = (line_h_ft + line_h_vs + len(opp_lines) * line_h_ft + 12 + score_line_h)
+    header_h = max(220, header_text_h + 60)
+
+    show_trophies = attacker_delta > 0 or len(attacker_gained) > 0
+    show_losses = attacker_delta < 0 or len(defender_gained) > 0
+
+    ag_h = _grid_h(attacker_gained) if (show_trophies and attacker_gained) else 0
+    dg_h = _grid_h(defender_gained) if (show_losses and defender_gained) else 0
+
+    SEC_LBL_H = 44
     DELTA_H = 60
-    TROPHIES_LABEL_H = 44
-    SECTION_GAP = 50
+    GRID_PAD = 16
+    SECTION_GAP = 40
+    SEP_H = 20
     PAD_TOP = 30
     PAD_BOTTOM = 50
 
-    main_content_h = (PAD_TOP + LABEL_H + DELTA_H + TROPHIES_LABEL_H + ag_h +
-                      SECTION_GAP + LABEL_H + DELTA_H + TROPHIES_LABEL_H + dg_h + PAD_BOTTOM)
+    main_content_h = PAD_TOP + PAD_BOTTOM
+    if show_trophies:
+        main_content_h += SEC_LBL_H + DELTA_H + (GRID_PAD + ag_h if attacker_gained else 0)
+    if show_losses:
+        main_content_h += SEC_LBL_H + DELTA_H + (GRID_PAD + dg_h if defender_gained else 0)
+    if show_trophies and show_losses:
+        main_content_h += SECTION_GAP + SEP_H + SECTION_GAP
+    if not show_trophies and not show_losses:
+        main_content_h += 80
 
     header_top = 40
     header_bottom = header_top + header_h
@@ -453,55 +580,81 @@ def render_duel_result(
     bg = Image.new("RGBA", (w, h), C_BG)
     draw = ImageDraw.Draw(bg)
 
+    # ── Header card ──────────────────────────────────────────
     _rounded_rect(draw, (40, header_top, w - 40, header_bottom), radius=30, fill=C_CARD)
     ty = header_top + 30
-    for ln in title_lines:
-        draw.text((PAD_L, ty), ln, font=ft, fill=C_TEXT)
-        ty += line_h
-    score_y = ty + 4
-    ball_cx = PAD_L + BALL_R
-    ball_cy = score_y + fs.size // 2
-    _draw_bowling_ball(draw, ball_cx, ball_cy, BALL_R)
-    draw.text((PAD_L + BALL_R * 2 + 8, score_y), title, font=fs, fill=C_SUB)
 
+    draw.text((PAD_L, ty), my_line, font=ft, fill=C_TEXT)
+    ty += line_h_ft
+
+    draw.text((PAD_L + 24, ty), vs_text, font=fvs, fill=C_SUB)
+    ty += line_h_vs
+
+    for ln in opp_lines:
+        draw.text((PAD_L, ty), ln, font=ft, fill=C_TEXT)
+        ty += line_h_ft
+    ty += 12
+
+    ball_cx = PAD_L + BALL_R
+    ball_cy = ty + BALL_R
+    _draw_bowling_ball(draw, ball_cx, ball_cy, BALL_R)
+    draw.text((PAD_L + BALL_R * 2 + 8, ty), title, font=fs, fill=C_SUB)
+
+    # ── Main card ─────────────────────────────────────────────
     _rounded_rect(draw, (40, main_top, w - 40, h - 40), radius=30, fill=C_CARD)
 
-    def _draw_delta_line(v: int, y: int) -> None:
-        sign = "+" if v >= 0 else "\u2212"
+    def _draw_energy_line(v: int, y: int, color) -> None:
+        sign = "+" if v >= 0 else "−"
+        vv = abs(v)
         sign_bb = draw.textbbox((0, 0), sign, font=ft)
         sign_w = sign_bb[2] - sign_bb[0]
-        draw.text((PAD_L, y), sign, font=ft, fill=C_TEXT)
+        draw.text((PAD_L, y), sign, font=ft, fill=color)
         bolt_x = PAD_L + sign_w + 12
         _draw_bolt(draw, bolt_x, y + 10, 26)
-        draw.text((bolt_x + 34, y), str(abs(v)), font=ft, fill=C_TEXT)
+        draw.text((bolt_x + 34, y), str(vv), font=ft, fill=color)
 
     def render_grid(items: List[RenderSticker], top_y: int) -> None:
         for i, s in enumerate(items):
             r, c = i // cols, i % cols
             x = PAD_L + c * (chip_sz + chip_gap)
-            y = top_y + r * (chip_sz + chip_gap)
-            _draw_chip(img=bg, draw=draw, sticker_path=s.path, x=x, y=y, size=chip_sz,
+            yy = top_y + r * (chip_sz + chip_gap)
+            _draw_chip(img=bg, draw=draw, sticker_path=s.path, x=x, y=yy, size=chip_sz,
                        nominal=int(s.count), number=i + 1, font_badge=fb, font_num=fn, show_number=False)
         if not items:
             draw.text((PAD_L, top_y + 8), t(lang, "no_chips"), font=fs, fill=C_SUB)
 
     y = main_top + PAD_TOP
-    draw.text((PAD_L, y), str(attacker_label), font=ft, fill=C_TEXT)
-    y += LABEL_H
-    _draw_delta_line(attacker_delta, y)
-    y += DELTA_H
-    draw.text((PAD_L, y), t(lang, "trophies"), font=fs, fill=C_SUB)
-    y += TROPHIES_LABEL_H
-    render_grid(attacker_gained, y)
-    y += ag_h + SECTION_GAP
 
-    draw.text((PAD_L, y), str(defender_label), font=ft, fill=C_TEXT)
-    y += LABEL_H
-    _draw_delta_line(defender_delta, y)
-    y += DELTA_H
-    draw.text((PAD_L, y), t(lang, "trophies"), font=fs, fill=C_SUB)
-    y += TROPHIES_LABEL_H
-    render_grid(defender_gained, y)
+    # Trophies section
+    if show_trophies:
+        draw.text((PAD_L, y), t(lang, "trophies_section") + ":", font=fs, fill=C_WIN)
+        y += SEC_LBL_H
+        _draw_energy_line(attacker_delta, y, C_WIN)
+        y += DELTA_H
+        if attacker_gained:
+            y += GRID_PAD
+            render_grid(attacker_gained, y)
+            y += ag_h
+
+    # Separator between sections
+    if show_trophies and show_losses:
+        y += SECTION_GAP
+        draw.line((PAD_L, y + SEP_H // 2, w - PAD_L, y + SEP_H // 2), fill=C_MUTED_CARD, width=2)
+        y += SEP_H + SECTION_GAP
+
+    # Losses section
+    if show_losses:
+        draw.text((PAD_L, y), t(lang, "losses_section") + ":", font=fs, fill=C_LOSE)
+        y += SEC_LBL_H
+        _draw_energy_line(attacker_delta, y, C_LOSE)
+        y += DELTA_H
+        if defender_gained:
+            y += GRID_PAD
+            render_grid(defender_gained, y)
+
+    # Draw label
+    if not show_trophies and not show_losses:
+        draw.text((PAD_L, y), t(lang, "draw_label"), font=ft, fill=C_SUB)
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     bg.convert("RGB").save(out_path, "PNG")

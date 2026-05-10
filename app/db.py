@@ -16,6 +16,7 @@ class User:
     energy: int
     energy_updated_at: int
     setup_done: int
+    mm_games: int
     created_at: int
 
 
@@ -57,6 +58,7 @@ class Database:
                     notify_energy_reset INTEGER NOT NULL DEFAULT 0,
                     ui_language TEXT NOT NULL DEFAULT 'en',
                     setup_done INTEGER NOT NULL DEFAULT 0,
+                    mm_games INTEGER NOT NULL DEFAULT 0,
                     created_at INTEGER NOT NULL
                 );
 
@@ -94,6 +96,10 @@ class Database:
                 pass
             try:
                 await db.execute("ALTER TABLE users ADD COLUMN ui_language TEXT NOT NULL DEFAULT 'en'")
+            except Exception:
+                pass
+            try:
+                await db.execute("ALTER TABLE users ADD COLUMN mm_games INTEGER NOT NULL DEFAULT 0")
             except Exception:
                 pass
             await db.commit()
@@ -170,7 +176,7 @@ class Database:
             await self._configure(db)
             row = await self._fetchone(
                 db,
-                "SELECT user_id, energy, energy_updated_at, setup_done, created_at FROM users WHERE user_id=?",
+                "SELECT user_id, energy, energy_updated_at, setup_done, mm_games, created_at FROM users WHERE user_id=?",
                 (user_id,),
             )
             if row:
@@ -179,11 +185,11 @@ class Database:
                     await db.commit()
                 return User(**dict(row))
             await db.execute(
-                "INSERT INTO users(user_id, energy, energy_updated_at, notify_energy_reset, ui_language, setup_done, created_at) VALUES(?,?,?,?,?,?,?)",
-                (user_id, 3, now, 0, language, 0, now),
+                "INSERT INTO users(user_id, energy, energy_updated_at, notify_energy_reset, ui_language, setup_done, mm_games, created_at) VALUES(?,?,?,?,?,?,?,?)",
+                (user_id, 3, now, 0, language, 0, 0, now),
             )
             await db.commit()
-            return User(user_id=user_id, energy=3, energy_updated_at=now, setup_done=0, created_at=now)
+            return User(user_id=user_id, energy=3, energy_updated_at=now, setup_done=0, mm_games=0, created_at=now)
 
     async def get_ui_language(self, user_id: int) -> str:
         async with self.connect() as db:
@@ -249,6 +255,15 @@ class Database:
             )
             await db.commit()
 
+    async def increment_mm_games(self, user_id: int) -> None:
+        async with self.connect() as db:
+            await self._configure(db)
+            await db.execute(
+                "UPDATE users SET mm_games=mm_games+1 WHERE user_id=?",
+                (user_id,),
+            )
+            await db.commit()
+
     async def get_inventory(self, user_id: int) -> Dict[str, int]:
         async with self.connect() as db:
             await self._configure(db)
@@ -291,7 +306,8 @@ class Database:
                 SELECT u.user_id, u.energy, u.setup_done, u.created_at,
                        COUNT(DISTINCT i.sticker_file_id) as chips_count,
                        COALESCE(SUM(i.count), 0) as total_nominal,
-                       (SELECT COUNT(*) FROM duels d WHERE d.status='done' AND (d.creator_id=u.user_id OR d.opponent_id=u.user_id)) as duels_count
+                       (SELECT COUNT(*) FROM duels d WHERE d.status='done' AND (d.creator_id=u.user_id OR d.opponent_id=u.user_id)) as duels_count,
+                       u.mm_games
                 FROM users u
                 LEFT JOIN inventory i ON i.user_id = u.user_id
                 GROUP BY u.user_id

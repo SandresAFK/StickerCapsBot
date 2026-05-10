@@ -19,6 +19,10 @@ class DuelAccept(StatesGroup):
     picking = State()
 
 
+class MatchmakingPick(StatesGroup):
+    picking = State()
+
+
 class EnergySpend(StatesGroup):
     menu = State()
     upgrade = State()
