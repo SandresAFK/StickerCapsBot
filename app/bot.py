@@ -220,6 +220,13 @@ async def cb_collection(cb: CallbackQuery, state: FSMContext, db: Database, bot:
     await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id, edit_in_place=True)
 
 
+@router.callback_query(F.data == "result_collection")
+async def cb_result_collection(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
+    await _loading(cb)
+    await state.clear()
+    await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id, edit_in_place=False)
+
+
 @router.callback_query(F.data == "pvp")
 async def cb_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache) -> None:
     await _loading(cb)
@@ -247,6 +254,33 @@ async def cb_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, c
             await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=caption), reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
         except Exception:
             await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+    await cb.answer()
+
+
+@router.callback_query(F.data == "result_pvp")
+async def cb_result_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache) -> None:
+    await _loading(cb)
+    lang = get_event_lang(cb)
+    inv = await db.get_inventory(cb.from_user.id)
+    if not inv:
+        await cb.answer(t(lang, "setup_first"), show_alert=False)
+        return
+    inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
+    await state.set_state(DuelCreate.picking)
+    await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=0)
+
+    paths: Dict[str, str] = {}
+    for file_id, _ in inv_items:
+        try:
+            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
+        except Exception:
+            pass
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
+    render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    pic = FSInputFile(out)
+    caption = t(lang, "choose_chips_buttons")
+    if cb.message:
+        await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
     await cb.answer()
 
 
@@ -286,6 +320,42 @@ async def cb_duel_rematch(cb: CallbackQuery, state: FSMContext, db: Database, bo
             await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=caption), reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
         except Exception:
             await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("duel_rematch_new:"))
+async def cb_duel_rematch_new(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache) -> None:
+    await _loading(cb)
+    lang = get_event_lang(cb)
+    try:
+        opponent_id = int(cb.data.split(":", 1)[1])
+    except Exception:
+        await cb.answer(t(lang, "stale_button"), show_alert=False)
+        return
+    if opponent_id == cb.from_user.id:
+        await cb.answer(t(lang, "cannot_challenge_self"), show_alert=False)
+        return
+
+    inv = await db.get_inventory(cb.from_user.id)
+    if not inv:
+        await cb.answer(t(lang, "setup_first"), show_alert=False)
+        return
+    inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
+    await state.set_state(DuelCreate.picking)
+    await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=opponent_id)
+
+    paths: Dict[str, str] = {}
+    for file_id, _ in inv_items:
+        try:
+            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
+        except Exception:
+            pass
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
+    render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    pic = FSInputFile(out)
+    caption = t(lang, "choose_chips_buttons")
+    if cb.message:
+        await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
     await cb.answer()
 
 
@@ -1008,6 +1078,30 @@ async def cb_matchmaking(cb: CallbackQuery, state: FSMContext, db: Database, bot
         await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=t(lang, "collection")), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
     except Exception:
         await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
+    await cb.answer()
+
+
+@router.callback_query(F.data == "result_mm")
+async def cb_result_mm(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
+    await _loading(cb)
+    lang = get_event_lang(cb)
+    inv = await db.get_inventory(cb.from_user.id)
+    if not inv:
+        await cb.answer(t(lang, "setup_first"), show_alert=False)
+        return
+    inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
+    await state.set_state(MatchmakingPick.picking)
+    await state.update_data(picked={}, inv_order=[k for k, _ in inv_items])
+    paths: Dict[str, str] = {}
+    for file_id, _ in inv_items:
+        try:
+            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
+        except Exception:
+            pass
+    out = os.path.join(os.getcwd(), "data", "renders", f"mm_pick_{cb.from_user.id}.png")
+    render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    pic = FSInputFile(out)
+    await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
     await cb.answer()
 
 

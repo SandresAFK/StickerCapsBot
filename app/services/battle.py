@@ -63,7 +63,7 @@ def distribute_by_slot(
     enemy_slot: int,
 ) -> BattleResult:
     """Детерминированное распределение по разнице кеглей. Никакого random."""
-    if player_slot == 0 and enemy_slot == 0:
+    if player_slot == enemy_slot:
         return BattleResult(player_won=list(player_units), enemy_won=list(enemy_units))
     diff = abs(player_slot - enemy_slot)
     w_pct = PIN_DIFF_PCT.get(diff, 1.00)

@@ -29,16 +29,16 @@ def kb_collection_only(lang: str) -> InlineKeyboardMarkup:
 
 def kb_result_actions(lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text=t(lang, "rematch"), callback_data="pvp")
-    b.button(text=t(lang, "collection"), callback_data="collection")
+    b.button(text=t(lang, "rematch"), callback_data="result_pvp")
+    b.button(text=t(lang, "collection"), callback_data="result_collection")
     b.adjust(2)
     return b.as_markup()
 
 
 def kb_duel_result_actions(opponent_id: int, lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text=t(lang, "rematch"), callback_data=f"duel_rematch:{int(opponent_id)}")
-    b.button(text=t(lang, "collection"), callback_data="collection")
+    b.button(text=t(lang, "rematch"), callback_data=f"duel_rematch_new:{int(opponent_id)}")
+    b.button(text=t(lang, "collection"), callback_data="result_collection")
     b.adjust(2)
     return b.as_markup()
 
@@ -223,8 +223,8 @@ def kb_matchmaking_pick(inv_items: List[Tuple[str, int]], picked: Dict[str, int]
 
 def kb_matchmaking_result(lang: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
-    b.button(text=t(lang, "mm_rematch"), callback_data="mm")
-    b.button(text=t(lang, "collection"), callback_data="collection")
+    b.button(text=t(lang, "mm_rematch"), callback_data="result_mm")
+    b.button(text=t(lang, "collection"), callback_data="result_collection")
     b.adjust(2)
     return b.as_markup()
 

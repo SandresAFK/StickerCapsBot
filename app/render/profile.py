@@ -219,7 +219,7 @@ def _draw_chip(*, img: Image.Image, draw: ImageDraw.ImageDraw, sticker_path: str
     ss = 4
 
     if show_number:
-        n = f"№{number}"
+        n = f"#{number}"
         nb = draw.textbbox((0, 0), n, font=font_num)
         ntw, nth = nb[2] - nb[0], nb[3] - nb[1]
         pad = 10
@@ -423,7 +423,7 @@ def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[R
     ft = _load_font(40)
     fs = _load_font(26)
     fb = _load_font(24)
-    fn = _load_font(24)
+    fn = _load_font(30)
 
     _rounded_rect(draw, (40, 40, w - 40, 220), radius=30, fill=C_CARD)
 
@@ -534,7 +534,7 @@ def render_duel_result(
     fs = _load_font(28)
     fvs = _load_font(30)
     fb = _load_font(24)
-    fn = _load_font(24)
+    fn = _load_font(30)
 
     you_lbl = t(lang, "you_label")
     vs_text = t(lang, "versus")
@@ -681,7 +681,7 @@ def render_battle_result(
     ft = _load_font(40)
     fs = _load_font(28)
     fb = _load_font(24)
-    fn = _load_font(24)
+    fn = _load_font(30)
 
     _rounded_rect(draw, (40, 40, w - 40, 220), radius=30, fill=C_CARD)
     has_avatar = False
