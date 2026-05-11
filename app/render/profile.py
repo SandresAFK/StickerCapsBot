@@ -420,8 +420,8 @@ def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[R
         h = 720
     bg = Image.new("RGBA", (w, h), C_BG)
     draw = ImageDraw.Draw(bg)
-    ft = _load_font(60)
-    fs = _load_font(36)
+    ft = _load_font(40)
+    fs = _load_font(26)
     fb = _load_font(24)
     fn = _load_font(24)
 
@@ -530,8 +530,8 @@ def render_duel_result(
         rows = (len(items) + cols - 1) // cols
         return rows * chip_sz + (rows - 1) * chip_gap
 
-    ft = _load_font(60)
-    fs = _load_font(36)
+    ft = _load_font(40)
+    fs = _load_font(26)
     fvs = _load_font(30)
     fb = _load_font(24)
     fn = _load_font(24)
@@ -678,8 +678,8 @@ def render_battle_result(
     w, h = 900, 1200
     bg = Image.new("RGBA", (w, h), C_BG)
     draw = ImageDraw.Draw(bg)
-    ft = _load_font(60)
-    fs = _load_font(36)
+    ft = _load_font(40)
+    fs = _load_font(26)
     fb = _load_font(24)
     fn = _load_font(24)
 
