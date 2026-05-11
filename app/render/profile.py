@@ -219,7 +219,7 @@ def _draw_chip(*, img: Image.Image, draw: ImageDraw.ImageDraw, sticker_path: str
     ss = 4
 
     if show_number:
-        n = f"#{number}"
+        n = f"№{number}"
         nb = draw.textbbox((0, 0), n, font=font_num)
         ntw, nth = nb[2] - nb[0], nb[3] - nb[1]
         pad = 10
@@ -420,10 +420,10 @@ def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[R
         h = 720
     bg = Image.new("RGBA", (w, h), C_BG)
     draw = ImageDraw.Draw(bg)
-    ft = _load_font(40)
-    fs = _load_font(26)
+    ft = _load_font(60)
+    fs = _load_font(36)
     fb = _load_font(24)
-    fn = _load_font(30)
+    fn = _load_font(24)
 
     _rounded_rect(draw, (40, 40, w - 40, 220), radius=30, fill=C_CARD)
 
@@ -530,11 +530,11 @@ def render_duel_result(
         rows = (len(items) + cols - 1) // cols
         return rows * chip_sz + (rows - 1) * chip_gap
 
-    ft = _load_font(40)
-    fs = _load_font(28)
+    ft = _load_font(60)
+    fs = _load_font(36)
     fvs = _load_font(30)
     fb = _load_font(24)
-    fn = _load_font(30)
+    fn = _load_font(24)
 
     you_lbl = t(lang, "you_label")
     vs_text = t(lang, "versus")
@@ -678,10 +678,10 @@ def render_battle_result(
     w, h = 900, 1200
     bg = Image.new("RGBA", (w, h), C_BG)
     draw = ImageDraw.Draw(bg)
-    ft = _load_font(40)
-    fs = _load_font(28)
+    ft = _load_font(60)
+    fs = _load_font(36)
     fb = _load_font(24)
-    fn = _load_font(30)
+    fn = _load_font(24)
 
     _rounded_rect(draw, (40, 40, w - 40, 220), radius=30, fill=C_CARD)
     has_avatar = False
