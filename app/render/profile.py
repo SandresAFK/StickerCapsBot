@@ -675,7 +675,7 @@ def render_battle_result(
     header_energy: int | None = None,
     lang: str = "ru",
 ) -> str:
-    w, h = 900, 1200
+    w, h = 900, 1280
     bg = Image.new("RGBA", (w, h), C_BG)
     draw = ImageDraw.Draw(bg)
     ft = _load_font(40)
@@ -706,23 +706,22 @@ def render_battle_result(
         sep_text = ""
 
     x0, y0 = 70, 280
-    draw.text((x0, y0), label_text, font=ft, fill=C_TEXT)
-    lb = draw.textbbox((0, 0), label_text, font=ft)
-    lw = lb[2] - lb[0]
-    sb = draw.textbbox((0, 0), sep_text, font=ft)
-    sw = sb[2] - sb[0]
-    x_sep = x0 + lw
-    if sep_text:
-        draw.text((x_sep, y0), sep_text, font=ft, fill=C_TEXT)
 
     bolt_size = 26
-    x_bolt = x_sep + sw
-    _draw_bolt(draw, int(x_bolt), 292, bolt_size)
-    draw.text((int(x_bolt + bolt_size + 6), y0), str(won_energy), font=ft, fill=C_TEXT)
+    _draw_bolt(draw, x0, y0 + 12, bolt_size)
+    draw.text((x0 + bolt_size + 6, y0), str(won_energy), font=ft, fill=C_TEXT)
+
+    y_label = y0 + 50
+    draw.text((x0, y_label), label_text, font=ft, fill=C_TEXT)
+    if sep_text:
+        lb = draw.textbbox((0, 0), label_text, font=ft)
+        lw = lb[2] - lb[0]
+        draw.text((x0 + lw, y_label), sep_text, font=ft, fill=C_TEXT)
+
     if show_bottom:
-        draw.text((70, 760), str(bottom_label), font=ft, fill=C_TEXT)
-        _draw_bolt(draw, 330, 772, 26)
-        draw.text((362, 760), str(lost_energy), font=ft, fill=C_TEXT)
+        draw.text((70, 800), str(bottom_label), font=ft, fill=C_TEXT)
+        _draw_bolt(draw, 330, 812, 26)
+        draw.text((362, 800), str(lost_energy), font=ft, fill=C_TEXT)
 
     def render_grid(items: List[RenderSticker], top_y: int):
         chip, cols, gap = 220, 3, 35
@@ -734,9 +733,9 @@ def render_battle_result(
         if not items:
             draw.text((70, top_y + 20), "-", font=fs, fill=C_SUB)
 
-    render_grid(won, 350)
+    render_grid(won, 390)
     if show_bottom:
-        render_grid(lost, 830)
+        render_grid(lost, 870)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     bg.convert("RGB").save(out_path, "PNG")
     return out_path
