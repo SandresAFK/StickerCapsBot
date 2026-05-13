@@ -10,5 +10,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .env
+*.pem
 .data/
 data/renders/
