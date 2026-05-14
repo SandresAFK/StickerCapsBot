@@ -5,11 +5,26 @@ from typing import Any, Awaitable, Callable, Dict
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from app.cleanup import flush as _flush_msgs
 from app.config import Config
 from app.db import Database
 from app.i18n import get_event_lang
 from app.services.avatars import AvatarCache
 from app.services.stickers import StickerCache
+
+_SKIP_FLUSH: tuple[str, ...] = (
+    "noop",
+    "pick_toggle:",
+    "mm_pick_toggle:",
+    "duel_pick_toggle:",
+    "duel2_pick_toggle:",
+    "duel_pick_all",
+    "pick_all",
+    "mm_pick_all",
+    "eu+:",
+    "setup_done_disabled",
+    "duel_decline:",
+)
 
 
 class DI(BaseMiddleware):
@@ -34,5 +49,17 @@ class DI(BaseMiddleware):
         data["avatars"] = self._avatars
         data["cfg"] = self._cfg
         data["lang"] = lang
-        return await handler(event, data)
 
+        bot = data.get("bot")
+        if bot and from_user is not None:
+            cb_data = getattr(event, "data", None)
+            should_flush = True
+            if cb_data:
+                for prefix in _SKIP_FLUSH:
+                    if cb_data == prefix or cb_data.startswith(prefix):
+                        should_flush = False
+                        break
+            if should_flush:
+                await _flush_msgs(bot, int(from_user.id))
+
+        return await handler(event, data)

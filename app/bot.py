@@ -12,6 +12,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, FSInputFile, InputMediaPhoto, Message
 
+from app.cleanup import flush as _flush, track as _track
 from app.config import Config, load_config
 from app.db import Database
 from app.i18n import get_event_lang, t
@@ -77,10 +78,11 @@ async def _notify_user_no_chips(*, bot: Bot, db: Database, user_id: int) -> None
     lang = await _user_lang(db, user_id)
     left = seconds_until_next_utc_midnight()
     await db.set_notify_energy_reset(user_id, 1)
-    await bot.send_message(
+    msg = await bot.send_message(
         chat_id=user_id,
         text=t(lang, "no_chips_notify", time_left=_fmt_seconds(left)),
     )
+    _track(user_id, msg)
 
 
 async def _energy_reset_worker(*, bot: Bot, db: Database, cache: StickerCache, avatars: AvatarCache) -> None:
@@ -94,10 +96,11 @@ async def _energy_reset_worker(*, bot: Bot, db: Database, cache: StickerCache, a
             for uid in user_ids:
                 try:
                     lang = await _user_lang(db, uid)
-                    await bot.send_message(
+                    _msg = await bot.send_message(
                         chat_id=uid,
                         text=t(lang, "energy_restored"),
                     )
+                    _track(uid, _msg)
                     await _send_profile_to_user(uid, bot=bot, db=db, cache=cache, avatars=avatars)
                 except Exception:
                     pass
@@ -186,13 +189,17 @@ async def _render_and_send_profile(message_or_cb: Message | CallbackQuery, *, bo
         if edit_in_place and message_or_cb.message:
             try:
                 await message_or_cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=t(lang, "collection_caption")), reply_markup=markup)
+                _track(user_id, message_or_cb.message)
             except Exception:
-                await message_or_cb.message.answer_photo(pic, caption=t(lang, "collection_caption"), reply_markup=markup)
+                _msg = await message_or_cb.message.answer_photo(pic, caption=t(lang, "collection_caption"), reply_markup=markup)
+                _track(user_id, _msg)
         else:
-            await message_or_cb.message.answer_photo(pic, caption=t(lang, "collection_caption"), reply_markup=markup)
+            _msg = await message_or_cb.message.answer_photo(pic, caption=t(lang, "collection_caption"), reply_markup=markup)
+            _track(user_id, _msg)
         await message_or_cb.answer()
     else:
-        await message_or_cb.answer_photo(pic, caption=t(lang, "collection_caption"), reply_markup=markup)
+        _msg = await message_or_cb.answer_photo(pic, caption=t(lang, "collection_caption"), reply_markup=markup)
+        _track(user_id, _msg)
 
 
 @router.message(CommandStart())
@@ -252,8 +259,10 @@ async def cb_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, c
     if cb.message:
         try:
             await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=caption), reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+            _track(cb.from_user.id, cb.message)
         except Exception:
-            await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+            _msg = await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+            _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -280,7 +289,8 @@ async def cb_result_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot:
     pic = FSInputFile(out)
     caption = t(lang, "choose_chips_buttons")
     if cb.message:
-        await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+        _msg = await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+        _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -318,8 +328,10 @@ async def cb_duel_rematch(cb: CallbackQuery, state: FSMContext, db: Database, bo
     if cb.message:
         try:
             await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=caption), reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+            _track(cb.from_user.id, cb.message)
         except Exception:
-            await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+            _msg = await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+            _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -355,7 +367,8 @@ async def cb_duel_rematch_new(cb: CallbackQuery, state: FSMContext, db: Database
     pic = FSInputFile(out)
     caption = t(lang, "choose_chips_buttons")
     if cb.message:
-        await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+        _msg = await cb.message.answer_photo(pic, caption=caption, reply_markup=kb_duel_pick(inv_items, picked={}, lang=lang))
+        _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -436,20 +449,24 @@ async def cb_duel_create(cb: CallbackQuery, state: FSMContext, db: Database, bot
     if rematch_opponent_id > 0:
         try:
             await _send_duel_offer_to_user(rematch_opponent_id, duel_id=duel_id, db=db, bot=bot, cache=cache, avatars=avatars)
-            await cb.message.answer(t(lang, "rematch_dm_sent"))
+            _msg = await cb.message.answer(t(lang, "rematch_dm_sent"))
+            _track(cb.from_user.id, _msg)
         except Exception:
             me = await bot.get_me()
             link = f"https://t.me/{me.username}?start=duel_{duel_id}"
             inviter = _display_name(cb, lang)
             invite_text = t(lang, "duel_invite_text", inviter=inviter, link=link)
-            await cb.message.answer(t(lang, "invite_rematch_dm_failed"), reply_markup=kb_share_duel(invite_text, lang=lang))
-            await cb.message.answer(link)
+            _msg = await cb.message.answer(t(lang, "invite_rematch_dm_failed"), reply_markup=kb_share_duel(invite_text, lang=lang))
+            _track(cb.from_user.id, _msg)
+            _msg = await cb.message.answer(link)
+            _track(cb.from_user.id, _msg)
     else:
         me = await bot.get_me()
         link = f"https://t.me/{me.username}?start=duel_{duel_id}"
         inviter = _display_name(cb, lang)
         invite_text = t(lang, "duel_invite_text", inviter=inviter, link=link)
-        await cb.message.answer(t(lang, "battle_link", link=link), reply_markup=kb_share_duel(invite_text, lang=lang))
+        _msg = await cb.message.answer(t(lang, "battle_link", link=link), reply_markup=kb_share_duel(invite_text, lang=lang))
+        _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -506,7 +523,8 @@ async def cb_duel_accept(cb: CallbackQuery, state: FSMContext, db: Database, bot
     inv = await db.get_inventory(cb.from_user.id)
     if not inv:
         await state.clear()
-        await cb.message.answer(t(lang, "setup_first"))
+        _msg = await cb.message.answer(t(lang, "setup_first"))
+        _track(cb.from_user.id, _msg)
         await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id, edit_in_place=False)
         await cb.answer()
         return
@@ -530,11 +548,12 @@ async def cb_duel_accept(cb: CallbackQuery, state: FSMContext, db: Database, bot
     user_duels = await db.get_user_duels_count(cb.from_user.id)
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, duels_count=user_duels, lang=lang)
     pic = FSInputFile(out)
-    await cb.message.answer_photo(
+    _msg = await cb.message.answer_photo(
         pic,
         caption=t(lang, "choose_chips_buttons"),
         reply_markup=kb_duel_accept_pick(inv_items, picked={}, target_energy=int(duel.get("target_energy") or 0), duel_id=duel_id, lang=lang),
     )
+    _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -571,7 +590,8 @@ async def _send_profile_to_user(user_id: int, *, bot: Bot, db: Database, cache: 
         markup = kb_start(no_chips=True, lang=lang) if int(user.setup_done) == 0 else kb_no_chips(user.energy, lang=lang)
     else:
         markup = kb_profile_actions(user.energy, lang=lang)
-    await bot.send_photo(chat_id=user_id, photo=FSInputFile(out), caption=caption or t(lang, "collection_caption"), reply_markup=markup)
+    _msg = await bot.send_photo(chat_id=user_id, photo=FSInputFile(out), caption=caption or t(lang, "collection_caption"), reply_markup=markup)
+    _track(user_id, _msg)
 
 
 @router.callback_query(DuelAccept.picking, F.data.startswith("duel_accept_go:"))
@@ -596,7 +616,8 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     opponent_pick = [fid for fid, v in picked.items() if int(v) > 0 and int(inv_op.get(fid, 0)) > 0]
     op_energy = sum(int(inv_op.get(fid, 1)) for fid in opponent_pick)
     if op_energy != target_energy:
-        await cb.message.answer(t(lang, "equal_energy_needed"))
+        _msg = await cb.message.answer(t(lang, "equal_energy_needed"))
+        _track(cb.from_user.id, _msg)
         await cb.answer(t(lang, "need_choose_same_energy"), show_alert=False)
         return
 
@@ -609,6 +630,8 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
         bot.send_dice(chat_id=creator_id, emoji="🎳"),
         bot.send_dice(chat_id=cb.from_user.id, emoji="🎳"),
     )
+    _track(creator_id, creator_dice_msg)
+    _track(cb.from_user.id, opponent_dice_msg)
     _bowling_pins = {1: 0, 2: 1, 3: 3, 4: 4, 5: 5, 6: 6}
     creator_slot = _bowling_pins.get(creator_dice_msg.dice.value, creator_dice_msg.dice.value)
     opponent_slot = _bowling_pins.get(opponent_dice_msg.dice.value, opponent_dice_msg.dice.value)
@@ -698,6 +721,8 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
         lang=lang,
     )
 
+    await _flush(bot, creator_id)
+    await _flush(bot, cb.from_user.id)
     await bot.send_photo(chat_id=creator_id, photo=FSInputFile(out_creator), caption="", reply_markup=kb_duel_result_actions(cb.from_user.id, lang=creator_lang))
     await bot.send_photo(chat_id=cb.from_user.id, photo=FSInputFile(out_op), caption="", reply_markup=kb_duel_result_actions(creator_id, lang=lang))
 
@@ -709,10 +734,12 @@ async def _show_duel_offer(message: Message, *, duel_id: str, db: Database, bot:
     lang = get_event_lang(message)
     duel = await db.get_duel(duel_id)
     if not duel or duel.get("status") != "open":
-        await message.answer(t(lang, "duel_unavailable"))
+        _msg = await message.answer(t(lang, "duel_unavailable"))
+        _track(message.from_user.id, _msg)
         return
     if int(duel.get("creator_id") or 0) == int(message.from_user.id):
-        await message.answer(t(lang, "send_link_friend"))
+        _msg = await message.answer(t(lang, "send_link_friend"))
+        _track(message.from_user.id, _msg)
         return
     creator_id = int(duel["creator_id"])
     creator_pick: list[str] = list(duel.get("creator_pick") or [])
@@ -751,7 +778,8 @@ async def _show_duel_offer(message: Message, *, duel_id: str, db: Database, bot:
         header_energy=target_energy,
         lang=lang,
     )
-    await message.answer_photo(FSInputFile(out), caption="", reply_markup=kb_duel_offer(duel_id, lang=lang))
+    _msg = await message.answer_photo(FSInputFile(out), caption="", reply_markup=kb_duel_offer(duel_id, lang=lang))
+    _track(message.from_user.id, _msg)
 
 
 async def _send_duel_offer_to_user(user_id: int, *, duel_id: str, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
@@ -796,14 +824,16 @@ async def _send_duel_offer_to_user(user_id: int, *, duel_id: str, db: Database, 
         header_energy=target_energy,
         lang=lang,
     )
-    await bot.send_photo(chat_id=user_id, photo=FSInputFile(out), caption="", reply_markup=kb_duel_offer(duel_id, lang=lang))
+    _msg = await bot.send_photo(chat_id=user_id, photo=FSInputFile(out), caption="", reply_markup=kb_duel_offer(duel_id, lang=lang))
+    _track(user_id, _msg)
 
 
 @router.callback_query(F.data == "setup")
 async def cb_setup(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(SetupChips.waiting_stickers)
     await state.update_data(stickers=[])
-    await cb.message.answer(_t(cb, "send_3_stickers"))
+    _msg = await cb.message.answer(_t(cb, "send_3_stickers"))
+    _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -819,13 +849,15 @@ async def cb_setup_default(cb: CallbackQuery, state: FSMContext, db: Database, b
             raise RuntimeError("not enough default stickers")
         await db.set_inventory_exact(cb.from_user.id, counts_from_list(file_ids))
         await db.set_setup_done(cb.from_user.id, 1)
-        await cb.message.answer(t(lang, "setup_default_done"))
+        _msg = await cb.message.answer(t(lang, "setup_default_done"))
+        _track(cb.from_user.id, _msg)
         await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id, edit_in_place=False)
         await cb.answer()
     except Exception:
         await cb.answer(t(lang, "setup_default_failed"), show_alert=False)
         try:
-            await cb.message.answer(t(lang, "setup_default_failed_hint"))
+            _msg = await cb.message.answer(t(lang, "setup_default_failed_hint"))
+            _track(cb.from_user.id, _msg)
         except Exception:
             pass
 
@@ -844,15 +876,18 @@ async def on_setup_collect(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     stickers: list[str] = list(data.get("stickers", []))
     if message.content_type != ContentType.STICKER or message.sticker is None:
-        await message.answer(t(lang, "need_sticker"))
+        _msg = await message.answer(t(lang, "need_sticker"))
+        _track(message.from_user.id, _msg)
         return
     stickers.append(_static_sticker_id(message.sticker))
     stickers = stickers[:3]
     await state.update_data(stickers=stickers)
     if len(stickers) < 3:
-        await message.answer(t(lang, "accepted_progress", count=len(stickers)))
+        _msg = await message.answer(t(lang, "accepted_progress", count=len(stickers)))
+        _track(message.from_user.id, _msg)
         return
-    await message.answer(t(lang, "accepted_done_press_ready"), reply_markup=kb_setup_confirm(can_confirm=True, lang=lang))
+    _msg = await message.answer(t(lang, "accepted_done_press_ready"), reply_markup=kb_setup_confirm(can_confirm=True, lang=lang))
+    _track(message.from_user.id, _msg)
 
 
 @router.callback_query(F.data == "setup_done_disabled")
@@ -878,7 +913,8 @@ async def cb_setup_done(cb: CallbackQuery, state: FSMContext, db: Database, bot:
     await db.set_inventory_exact(cb.from_user.id, counts_from_list(stickers))
     await db.set_setup_done(cb.from_user.id, 1)
     await state.clear()
-    await cb.message.answer(t(lang, "chips_saved"))
+    _msg = await cb.message.answer(t(lang, "chips_saved"))
+    _track(cb.from_user.id, _msg)
     await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id)
 
 
@@ -890,13 +926,15 @@ async def cb_play(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, 
     inv = await db.get_inventory(cb.from_user.id)
     if not inv:
         if user.energy <= 0:
-            await cb.message.answer(_no_energy_and_chips_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+            _msg = await cb.message.answer(_no_energy_and_chips_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+            _track(cb.from_user.id, _msg)
             await cb.answer(t(lang, "no_energy"), show_alert=False)
         else:
             await cb.answer(t(lang, "setup_first"), show_alert=False)
         return
     if user.energy <= 0:
-        await cb.message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+        _msg = await cb.message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+        _track(cb.from_user.id, _msg)
         await cb.answer(t(lang, "no_energy"), show_alert=False)
         return
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
@@ -914,8 +952,10 @@ async def cb_play(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, 
     if cb.message:
         try:
             await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=t(lang, "collection")), reply_markup=kb_battle_pick(inv_items, picked={}, lang=lang))
+            _track(cb.from_user.id, cb.message)
         except Exception:
-            await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_battle_pick(inv_items, picked={}, lang=lang))
+            _msg = await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_battle_pick(inv_items, picked={}, lang=lang))
+            _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -999,13 +1039,15 @@ async def cb_battle_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
         for fid, cnt in inv.items():
             pool.extend([fid] * max(1, int(cnt)))
         if not pool:
-            await cb.message.answer(t(lang, "opponent_build_failed_empty"))
+            _msg = await cb.message.answer(t(lang, "opponent_build_failed_empty"))
+            _track(cb.from_user.id, _msg)
             await cb.answer()
             return
         import random
 
         enemy_ids = [random.choice(pool) for _ in range(len(player_units))]
-        await cb.message.answer(t(lang, "use_collection_fallback"))
+        _msg = await cb.message.answer(t(lang, "use_collection_fallback"))
+        _track(cb.from_user.id, _msg)
 
     for i, u in enumerate(player_units):
         enemy_units.append(BattleUnit(file_id=enemy_ids[i % len(enemy_ids)], nominal=u.nominal))
@@ -1036,6 +1078,7 @@ async def cb_battle_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
     avatar = await avatars.get_avatar_path(bot, cb.from_user.id)
     render_battle_result(title=t(lang, "battle_result_title"), user_title=_display_name(cb, lang), avatar_path=avatar, lost=lost, won=won, out_path=out, lang=lang)
     await state.clear()
+    await _flush(bot, cb.from_user.id)
     await cb.message.answer_photo(FSInputFile(out), caption="", reply_markup=kb_result_actions(lang=lang))
 
 
@@ -1076,8 +1119,10 @@ async def cb_matchmaking(cb: CallbackQuery, state: FSMContext, db: Database, bot
     pic = FSInputFile(out)
     try:
         await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=t(lang, "collection")), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
+        _track(cb.from_user.id, cb.message)
     except Exception:
-        await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
+        _msg = await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
+        _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -1101,7 +1146,8 @@ async def cb_result_mm(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
     out = os.path.join(os.getcwd(), "data", "renders", f"mm_pick_{cb.from_user.id}.png")
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
-    await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
+    _msg = await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
+    _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -1154,6 +1200,7 @@ async def cb_mm_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot,
     bot_name = _random.choice(MEME_OPPONENTS)
 
     searching_msg = await cb.message.answer(t(lang, "mm_searching", count=3))
+    _track(cb.from_user.id, searching_msg)
     await asyncio.sleep(1)
     try:
         await searching_msg.edit_text(t(lang, "mm_searching", count=2))
@@ -1189,11 +1236,15 @@ async def cb_mm_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot,
         nominals = [cuts[i + 1] - cuts[i] for i in range(len(cuts) - 1)]
         enemy_units = [BattleUnit(file_id=_random.choice(all_enemy_ids), nominal=nom) for nom in nominals]
 
-    await cb.message.answer(t(lang, "mm_your_roll"))
+    _msg_your = await cb.message.answer(t(lang, "mm_your_roll"))
+    _track(cb.from_user.id, _msg_your)
     player_dice_msg = await bot.send_dice(chat_id=cb.from_user.id, emoji="🎳")
+    _track(cb.from_user.id, player_dice_msg)
     await asyncio.sleep(1)
-    await cb.message.answer(t(lang, "mm_bot_roll", name=bot_name))
+    _msg_bot = await cb.message.answer(t(lang, "mm_bot_roll", name=bot_name))
+    _track(cb.from_user.id, _msg_bot)
     bot_dice_msg = await bot.send_dice(chat_id=cb.from_user.id, emoji="🎳")
+    _track(cb.from_user.id, bot_dice_msg)
     await asyncio.sleep(4)
 
     player_slot = _BOWLING_PINS.get(player_dice_msg.dice.value, player_dice_msg.dice.value)
@@ -1247,6 +1298,7 @@ async def cb_mm_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot,
         lang=lang,
     )
     await state.clear()
+    await _flush(bot, cb.from_user.id)
     await cb.message.answer_photo(FSInputFile(out), caption="", reply_markup=kb_matchmaking_result(lang=lang))
 
 
@@ -1254,10 +1306,12 @@ async def cb_mm_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot,
 async def cb_energy(cb: CallbackQuery, state: FSMContext, db: Database) -> None:
     lang = get_event_lang(cb)
     user = await get_user_with_regen(db, cb.from_user.id)
-    await cb.message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+    _msg = await cb.message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+    _track(cb.from_user.id, _msg)
     user = await get_user_with_regen(db, cb.from_user.id)
     await state.set_state(EnergySpend.menu)
-    await cb.message.answer(t(lang, "energy_menu_prompt"), reply_markup=kb_energy_menu(user.energy, lang=lang))
+    _msg = await cb.message.answer(t(lang, "energy_menu_prompt"), reply_markup=kb_energy_menu(user.energy, lang=lang))
+    _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -1267,7 +1321,8 @@ async def cb_eu(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, ca
     lang = get_event_lang(cb)
     user = await get_user_with_regen(db, cb.from_user.id)
     if user.energy <= 0:
-        await cb.message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+        _msg = await cb.message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+        _track(cb.from_user.id, _msg)
         await cb.answer(t(lang, "no_energy"), show_alert=False)
         return
     inv = await db.get_inventory(cb.from_user.id)
@@ -1286,8 +1341,10 @@ async def cb_eu(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, ca
     if cb.message:
         try:
             await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=t(lang, "collection")), reply_markup=kb_energy_upgrade(inv_items, spend={}, energy=user.energy, lang=lang))
+            _track(cb.from_user.id, cb.message)
         except Exception:
-            await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_energy_upgrade(inv_items, spend={}, energy=user.energy, lang=lang))
+            _msg = await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_energy_upgrade(inv_items, spend={}, energy=user.energy, lang=lang))
+            _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -1339,7 +1396,8 @@ async def cb_eu_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot,
     await db.add_inventory(cb.from_user.id, spend)
     await db.update_energy(cb.from_user.id, user.energy - used, updated_at=int(time.time()))
     await state.clear()
-    await cb.message.answer(t(lang, "upgrade_chips_done"))
+    _msg = await cb.message.answer(t(lang, "upgrade_chips_done"))
+    _track(cb.from_user.id, _msg)
     await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id)
 
 
@@ -1355,12 +1413,14 @@ async def cb_ea(cb: CallbackQuery, state: FSMContext, db: Database) -> None:
     lang = get_event_lang(cb)
     user = await get_user_with_regen(db, cb.from_user.id)
     if user.energy <= 0:
-        await cb.message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+        _msg = await cb.message.answer(_energy_wait_text(energy=user.energy, updated_at=user.energy_updated_at, lang=lang))
+        _track(cb.from_user.id, _msg)
         await cb.answer(t(lang, "no_energy"), show_alert=False)
         return
     await state.set_state(EnergySpend.add_sticker)
     await state.update_data(ea_pending=[], ea_max=user.energy)
-    await cb.message.answer(t(lang, "ea_prompt", energy=user.energy), reply_markup=kb_ea_collect(0, user.energy, lang))
+    _msg = await cb.message.answer(t(lang, "ea_prompt", energy=user.energy), reply_markup=kb_ea_collect(0, user.energy, lang))
+    _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -1368,26 +1428,31 @@ async def cb_ea(cb: CallbackQuery, state: FSMContext, db: Database) -> None:
 async def on_ea_sticker(message: Message, state: FSMContext, db: Database, bot: Bot, cache: StickerCache) -> None:
     lang = get_event_lang(message)
     if message.content_type != ContentType.STICKER or message.sticker is None:
-        await message.answer(t(lang, "need_sticker"))
+        _msg = await message.answer(t(lang, "need_sticker"))
+        _track(message.from_user.id, _msg)
         return
     data = await state.get_data()
     pending: list[str] = list(data.get("ea_pending", []))
     max_e: int = int(data.get("ea_max", 1))
     if len(pending) >= max_e:
-        await message.answer(t(lang, "ea_full", max=max_e), reply_markup=kb_ea_collect(len(pending), max_e, lang))
+        _msg = await message.answer(t(lang, "ea_full", max=max_e), reply_markup=kb_ea_collect(len(pending), max_e, lang))
+        _track(message.from_user.id, _msg)
         return
     file_id = _static_sticker_id(message.sticker)
     try:
         await cache.get_static_sticker_path(bot, file_id)
     except Exception:
-        await message.answer(t(lang, "sticker_unavailable"))
+        _msg = await message.answer(t(lang, "sticker_unavailable"))
+        _track(message.from_user.id, _msg)
         return
     pending.append(file_id)
     await state.update_data(ea_pending=pending)
     if len(pending) >= max_e:
-        await message.answer(t(lang, "ea_full", max=max_e), reply_markup=kb_ea_collect(len(pending), max_e, lang))
+        _msg = await message.answer(t(lang, "ea_full", max=max_e), reply_markup=kb_ea_collect(len(pending), max_e, lang))
+        _track(message.from_user.id, _msg)
     else:
-        await message.answer(t(lang, "ea_progress", count=len(pending), max=max_e), reply_markup=kb_ea_collect(len(pending), max_e, lang))
+        _msg = await message.answer(t(lang, "ea_progress", count=len(pending), max=max_e), reply_markup=kb_ea_collect(len(pending), max_e, lang))
+        _track(message.from_user.id, _msg)
 
 
 @router.callback_query(EnergySpend.add_sticker, F.data == "ea_confirm")
@@ -1405,7 +1470,8 @@ async def cb_ea_confirm(cb: CallbackQuery, state: FSMContext, db: Database, bot:
     await db.add_inventory(cb.from_user.id, counts_from_list(pending))
     await db.update_energy(cb.from_user.id, user.energy - len(pending), updated_at=int(time.time()))
     await state.clear()
-    await cb.message.answer(t(lang, "ea_done"))
+    _msg = await cb.message.answer(t(lang, "ea_done"))
+    _track(cb.from_user.id, _msg)
     await _render_and_send_profile(cb, bot=bot, db=db, cache=cache, avatars=avatars, user_id=cb.from_user.id)
     await cb.answer()
 
@@ -1420,7 +1486,8 @@ async def cb_ea_cancel(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
 @router.callback_query(F.data == "reset")
 async def cb_reset(cb: CallbackQuery) -> None:
     lang = get_event_lang(cb)
-    await cb.message.answer(t(lang, "reset_all_chips"), reply_markup=kb_reset_confirm(lang=lang))
+    _msg = await cb.message.answer(t(lang, "reset_all_chips"), reply_markup=kb_reset_confirm(lang=lang))
+    _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
@@ -1457,7 +1524,8 @@ async def cb_leaderboard(cb: CallbackQuery, db: Database, bot: Bot) -> None:
             f"{prefix} {name}\n"
             f"  🃏{s['chips_count']} ({s['total_nominal']}⚡) | ⚔️{s['duels_count']} | 🎮{s.get('mm_games', 0)}"
         )
-    await cb.message.answer("\n".join(lines))
+    _msg = await cb.message.answer("\n".join(lines))
+    _track(cb.from_user.id, _msg)
     await cb.answer()
 
 
