@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import os
+import time
 
 import httpx
 from aiogram import Bot
+
+_AVATAR_TTL = 300.0  # 5 minutes
 
 
 class AvatarCache:
     def __init__(self, base_dir: str):
         self.base_dir = os.path.join(base_dir, "avatar_cache")
         os.makedirs(self.base_dir, exist_ok=True)
+        self._ttl_cache: dict[int, tuple[float, str | None]] = {}
 
     def _path_for(self, user_id: int, file_unique_id: str, ext: str) -> str:
         safe = "".join(ch for ch in file_unique_id if ch.isalnum() or ch in ("-", "_"))
@@ -31,7 +35,7 @@ class AvatarCache:
                 f.write(r.content)
         return local
 
-    async def get_avatar_path(self, bot: Bot, user_id: int) -> str | None:
+    async def _fetch_avatar(self, bot: Bot, user_id: int) -> str | None:
         try:
             photos = await bot.get_user_profile_photos(user_id=user_id, limit=1)
             if photos.photos:
@@ -46,4 +50,16 @@ class AvatarCache:
         except Exception:
             pass
         return None
+
+    async def get_avatar_path(self, bot: Bot, user_id: int) -> str | None:
+        now = time.time()
+        cached = self._ttl_cache.get(user_id)
+        if cached:
+            ts, path = cached
+            if now - ts < _AVATAR_TTL:
+                if path is None or (os.path.exists(path) and os.path.getsize(path) > 0):
+                    return path
+        result = await self._fetch_avatar(bot, user_id)
+        self._ttl_cache[user_id] = (now, result)
+        return result
 

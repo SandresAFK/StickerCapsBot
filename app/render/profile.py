@@ -563,10 +563,12 @@ def render_duel_result(
     PAD_BOTTOM = 50
 
     main_content_h = PAD_TOP + PAD_BOTTOM
+    if show_trophies or show_losses:
+        main_content_h += DELTA_H
     if show_trophies:
-        main_content_h += SEC_LBL_H + DELTA_H + (GRID_PAD + ag_h if attacker_gained else 0)
+        main_content_h += SEC_LBL_H + (GRID_PAD + ag_h if attacker_gained else 0)
     if show_losses:
-        main_content_h += SEC_LBL_H + DELTA_H + (GRID_PAD + dg_h if defender_gained else 0)
+        main_content_h += SEC_LBL_H + (GRID_PAD + dg_h if defender_gained else 0)
     if show_trophies and show_losses:
         main_content_h += SECTION_GAP + SEP_H + SECTION_GAP
     if not show_trophies and not show_losses:
@@ -625,12 +627,15 @@ def render_duel_result(
 
     y = main_top + PAD_TOP
 
+    # Energy line once at top
+    if show_trophies or show_losses:
+        _draw_energy_line(attacker_delta, y, C_WIN if attacker_delta >= 0 else C_LOSE)
+        y += DELTA_H
+
     # Trophies section
     if show_trophies:
         draw.text((PAD_L, y), t(lang, "trophies_section") + ":", font=fs, fill=C_WIN)
         y += SEC_LBL_H
-        _draw_energy_line(attacker_delta, y, C_WIN)
-        y += DELTA_H
         if attacker_gained:
             y += GRID_PAD
             render_grid(attacker_gained, y)
@@ -646,8 +651,6 @@ def render_duel_result(
     if show_losses:
         draw.text((PAD_L, y), t(lang, "losses_section") + ":", font=fs, fill=C_LOSE)
         y += SEC_LBL_H
-        _draw_energy_line(attacker_delta, y, C_LOSE)
-        y += DELTA_H
         if defender_gained:
             y += GRID_PAD
             render_grid(defender_gained, y)

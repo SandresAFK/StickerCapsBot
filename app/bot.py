@@ -148,12 +148,7 @@ async def _render_and_send_profile(message_or_cb: Message | CallbackQuery, *, bo
     user = await get_user_with_regen(db, user_id)
     inv = await db.get_inventory(user_id)
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     avatar = await avatars.get_avatar_path(bot, user_id)
     out = os.path.join(os.getcwd(), "data", "renders", f"profile_{user_id}.png")
     empty_lines: list[str] | None = None
@@ -246,12 +241,7 @@ async def cb_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, c
     await state.set_state(DuelCreate.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=0)
 
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
@@ -278,12 +268,7 @@ async def cb_result_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot:
     await state.set_state(DuelCreate.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=0)
 
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
@@ -315,12 +300,7 @@ async def cb_duel_rematch(cb: CallbackQuery, state: FSMContext, db: Database, bo
     await state.set_state(DuelCreate.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=opponent_id)
 
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
@@ -356,12 +336,7 @@ async def cb_duel_rematch_new(cb: CallbackQuery, state: FSMContext, db: Database
     await state.set_state(DuelCreate.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=opponent_id)
 
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
@@ -538,12 +513,7 @@ async def cb_duel_accept(cb: CallbackQuery, state: FSMContext, db: Database, bot
     await state.set_state(DuelAccept.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], duel_id=duel_id, target_energy=int(duel.get("target_energy") or 0))
 
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     out = os.path.join(os.getcwd(), "data", "renders", f"duel_accept_{cb.from_user.id}_{duel_id}.png")
     user_duels = await db.get_user_duels_count(cb.from_user.id)
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, duels_count=user_duels, lang=lang)
@@ -575,12 +545,7 @@ async def _send_profile_to_user(user_id: int, *, bot: Bot, db: Database, cache: 
     user = await get_user_with_regen(db, user_id)
     inv = await db.get_inventory(user_id)
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     avatar = await avatars.get_avatar_path(bot, user_id)
     out = os.path.join(os.getcwd(), "data", "renders", f"profile_{user_id}.png")
     user_title = await _display_name_by_id(bot, user_id, lang)
@@ -682,12 +647,7 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     opponent_name = _display_name(cb, lang)
 
     # рендер результата (две персональные картинки; показываем только переданные фишки)
-    paths: Dict[str, str] = {}
-    for file_id in set([u.file_id for u in creator_gained_units] + [u.file_id for u in opponent_gained_units]):
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_ids(bot, set([u.file_id for u in creator_gained_units] + [u.file_id for u in opponent_gained_units]))
     attacker_gained = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in creator_gained_units if u.file_id in paths]
     defender_gained = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in opponent_gained_units if u.file_id in paths]
 
@@ -752,12 +712,7 @@ async def _show_duel_offer(message: Message, *, duel_id: str, db: Database, bot:
         creator_name = str(creator_id)
 
     inv_creator = await db.get_inventory(creator_id)
-    paths: Dict[str, str] = {}
-    for file_id in creator_pick:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_ids(bot, creator_pick)
     won = [RenderSticker(file_id=fid, path=paths[fid], count=int(inv_creator.get(fid, 1))) for fid in creator_pick if fid in paths]
 
     creator_avatar = None
@@ -798,12 +753,7 @@ async def _send_duel_offer_to_user(user_id: int, *, duel_id: str, db: Database, 
         creator_name = str(creator_id)
 
     inv_creator = await db.get_inventory(creator_id)
-    paths: Dict[str, str] = {}
-    for file_id in creator_pick:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_ids(bot, creator_pick)
     won = [RenderSticker(file_id=fid, path=paths[fid], count=int(inv_creator.get(fid, 1))) for fid in creator_pick if fid in paths]
 
     creator_avatar = None
@@ -940,12 +890,7 @@ async def cb_play(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, 
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
     await state.set_state(BattlePick.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items])
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     out = os.path.join(os.getcwd(), "data", "renders", f"battle_pick_{cb.from_user.id}.png")
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
@@ -1066,12 +1011,7 @@ async def cb_battle_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
         except Exception:
             pass
 
-    paths: Dict[str, str] = {}
-    for file_id in set([u.file_id for u in result.player_won] + [u.file_id for u in result.enemy_won]):
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_ids(bot, set([u.file_id for u in result.player_won] + [u.file_id for u in result.enemy_won]))
     won = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in result.player_won if u.file_id in paths]
     lost = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in result.enemy_won if u.file_id in paths]
     out = os.path.join(os.getcwd(), "data", "renders", f"battle_{cb.from_user.id}_{int(time.time())}.png")
@@ -1108,12 +1048,7 @@ async def cb_matchmaking(cb: CallbackQuery, state: FSMContext, db: Database, bot
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
     await state.set_state(MatchmakingPick.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items])
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     out = os.path.join(os.getcwd(), "data", "renders", f"mm_pick_{cb.from_user.id}.png")
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
@@ -1137,12 +1072,7 @@ async def cb_result_mm(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
     await state.set_state(MatchmakingPick.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items])
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     out = os.path.join(os.getcwd(), "data", "renders", f"mm_pick_{cb.from_user.id}.png")
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
@@ -1273,12 +1203,7 @@ async def cb_mm_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot,
         except Exception:
             pass
 
-    paths: Dict[str, str] = {}
-    for file_id in set([u.file_id for u in player_gained] + [u.file_id for u in bot_gained]):
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_ids(bot, set([u.file_id for u in player_gained] + [u.file_id for u in bot_gained]))
     attacker_gained_r = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in player_gained if u.file_id in paths]
     defender_gained_r = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in bot_gained if u.file_id in paths]
 
@@ -1329,12 +1254,7 @@ async def cb_eu(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, ca
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
     await state.set_state(EnergySpend.upgrade)
     await state.update_data(spend={}, inv_order=[k for k, _ in inv_items])
-    paths: Dict[str, str] = {}
-    for file_id, _ in inv_items:
-        try:
-            paths[file_id] = (await cache.get_static_sticker_path(bot, file_id)).local_path
-        except Exception:
-            pass
+    paths = await cache.get_paths_for_inv(bot, inv_items)
     out = os.path.join(os.getcwd(), "data", "renders", f"energy_upgrade_{cb.from_user.id}.png")
     render_profile(user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
