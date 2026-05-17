@@ -561,6 +561,25 @@ async def cb_duel2_pick_toggle(cb: CallbackQuery, state: FSMContext, db: Databas
     await _update_duel_pick(cb, state, db, True, "duel2")
 
 
+@router.callback_query(DuelAccept.picking, F.data.startswith("duel2_pick_all:"))
+async def cb_duel2_pick_all(cb: CallbackQuery, state: FSMContext, db: Database) -> None:
+    lang = get_event_lang(cb)
+    inv = await db.get_inventory(cb.from_user.id)
+    inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
+    data = await state.get_data()
+    picked: Dict[str, int] = dict(data.get("picked", {}))
+    all_selected = all(int(picked.get(fid, 0)) > 0 for fid, _ in inv_items)
+    if all_selected:
+        picked = {}
+    else:
+        picked = {fid: 1 for fid, cnt in inv_items if int(cnt) > 0}
+    await state.update_data(picked=picked)
+    target_energy = int(data.get("target_energy") or 0)
+    duel_id = str(data.get("duel_id") or "")
+    await cb.message.edit_reply_markup(reply_markup=kb_duel_accept_pick(inv_items, picked, target_energy=target_energy, duel_id=duel_id, lang=lang))
+    await cb.answer()
+
+
 @router.callback_query(DuelAccept.picking, F.data.startswith("duel_accept_cancel:"))
 async def cb_duel_accept_cancel(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, cache: StickerCache, avatars: AvatarCache) -> None:
     await _loading(cb)
