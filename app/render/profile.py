@@ -479,7 +479,9 @@ def render_profile(*, user_title: str, avatar_path: str | None, stickers: List[R
             _draw_chip(img=bg, draw=draw, sticker_path=s.path, x=x, y=y, size=chip, nominal=int(s.count), number=i + 1, font_badge=fb, font_num=fn)
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    bg.convert("RGB").save(out_path, "PNG")
+    _out = bg.convert("RGB")
+    _out = _out.resize((_out.width * 3 // 4, _out.height * 3 // 4), Image.LANCZOS)
+    _out.save(out_path, "WEBP", quality=85)
     return out_path
 
 
@@ -660,7 +662,9 @@ def render_duel_result(
         draw.text((PAD_L, y), t(lang, "draw_label"), font=ft, fill=C_SUB)
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    bg.convert("RGB").save(out_path, "PNG")
+    _out = bg.convert("RGB")
+    _out = _out.resize((_out.width * 3 // 4, _out.height * 3 // 4), Image.LANCZOS)
+    _out.save(out_path, "WEBP", quality=85)
     return out_path
 
 
@@ -740,6 +744,8 @@ def render_battle_result(
     if show_bottom:
         render_grid(lost, 870)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    bg.convert("RGB").save(out_path, "PNG")
+    _out = bg.convert("RGB")
+    _out = _out.resize((_out.width * 3 // 4, _out.height * 3 // 4), Image.LANCZOS)
+    _out.save(out_path, "WEBP", quality=85)
     return out_path
 

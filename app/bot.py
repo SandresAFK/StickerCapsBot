@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import hashlib
 import os
 import asyncio
 import secrets
@@ -32,6 +33,17 @@ router = Router()
 async def _in_executor(func, *args, **kwargs):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
+
+
+_render_hashes: dict[str, str] = {}
+
+
+def _render_cached(out_path: str, *args) -> bool:
+    h = hashlib.md5(str(args).encode()).hexdigest()[:12]
+    if _render_hashes.get(out_path) == h and os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+        return True
+    _render_hashes[out_path] = h
+    return False
 
 
 @router.callback_query(F.data == "noop")
@@ -156,7 +168,7 @@ async def _render_and_send_profile(message_or_cb: Message | CallbackQuery, *, bo
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
     paths = await cache.get_paths_for_inv(bot, inv_items)
     avatar = await avatars.get_avatar_path(bot, user_id)
-    out = os.path.join(os.getcwd(), "data", "renders", f"profile_{user_id}.png")
+    out = os.path.join(os.getcwd(), "data", "renders", f"profile_{user_id}.webp")
     empty_lines: list[str] | None = None
     if len(inv_items) == 0:
         if int(user.setup_done) == 0:
@@ -168,16 +180,17 @@ async def _render_and_send_profile(message_or_cb: Message | CallbackQuery, *, bo
                 t(lang, "notification_when_energy_restored"),
             ]
     duels_count = await db.get_user_duels_count(user_id)
-    await _in_executor(
-        render_profile,
-        user_title=_display_name(message_or_cb, lang),
-        avatar_path=avatar,
-        stickers=_inv_to_render(paths, inv_items),
-        out_path=out,
-        empty_lines=empty_lines,
-        duels_count=duels_count,
-        lang=lang,
-    )
+    if not _render_cached(out, tuple(inv_items), duels_count, lang, avatar, str(empty_lines)):
+        await _in_executor(
+            render_profile,
+            user_title=_display_name(message_or_cb, lang),
+            avatar_path=avatar,
+            stickers=_inv_to_render(paths, inv_items),
+            out_path=out,
+            empty_lines=empty_lines,
+            duels_count=duels_count,
+            lang=lang,
+        )
 
     if len(inv_items) == 0:
         if int(user.setup_done) == 0:
@@ -252,8 +265,9 @@ async def cb_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, c
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=0)
 
     paths = await cache.get_paths_for_inv(bot, inv_items)
-    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
-    await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.webp")
+    if not _render_cached(out, tuple(inv_items), lang):
+        await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
     caption = t(lang, "choose_chips_buttons")
     if cb.message:
@@ -279,8 +293,9 @@ async def cb_result_pvp(cb: CallbackQuery, state: FSMContext, db: Database, bot:
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=0)
 
     paths = await cache.get_paths_for_inv(bot, inv_items)
-    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
-    await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.webp")
+    if not _render_cached(out, tuple(inv_items), lang):
+        await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
     caption = t(lang, "choose_chips_buttons")
     if cb.message:
@@ -311,8 +326,9 @@ async def cb_duel_rematch(cb: CallbackQuery, state: FSMContext, db: Database, bo
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=opponent_id)
 
     paths = await cache.get_paths_for_inv(bot, inv_items)
-    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
-    await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.webp")
+    if not _render_cached(out, tuple(inv_items), lang):
+        await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
     caption = t(lang, "choose_chips_buttons")
     if cb.message:
@@ -347,8 +363,9 @@ async def cb_duel_rematch_new(cb: CallbackQuery, state: FSMContext, db: Database
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], rematch_opponent_id=opponent_id)
 
     paths = await cache.get_paths_for_inv(bot, inv_items)
-    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.png")
-    await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_pick_{cb.from_user.id}.webp")
+    if not _render_cached(out, tuple(inv_items), lang):
+        await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
     caption = t(lang, "choose_chips_buttons")
     if cb.message:
@@ -524,9 +541,10 @@ async def cb_duel_accept(cb: CallbackQuery, state: FSMContext, db: Database, bot
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items], duel_id=duel_id, target_energy=int(duel.get("target_energy") or 0))
 
     paths = await cache.get_paths_for_inv(bot, inv_items)
-    out = os.path.join(os.getcwd(), "data", "renders", f"duel_accept_{cb.from_user.id}_{duel_id}.png")
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_accept_{cb.from_user.id}_{duel_id}.webp")
     user_duels = await db.get_user_duels_count(cb.from_user.id)
-    await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, duels_count=user_duels, lang=lang)
+    if not _render_cached(out, tuple(inv_items), user_duels, lang):
+        await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, duels_count=user_duels, lang=lang)
     pic = FSInputFile(out)
     _msg = await cb.message.answer_photo(
         pic,
@@ -557,10 +575,11 @@ async def _send_profile_to_user(user_id: int, *, bot: Bot, db: Database, cache: 
     inv_items = sorted(inv.items(), key=lambda x: (-x[1], x[0]))
     paths = await cache.get_paths_for_inv(bot, inv_items)
     avatar = await avatars.get_avatar_path(bot, user_id)
-    out = os.path.join(os.getcwd(), "data", "renders", f"profile_{user_id}.png")
+    out = os.path.join(os.getcwd(), "data", "renders", f"profile_{user_id}.webp")
     user_title = await _display_name_by_id(bot, user_id, lang)
     duels_count = await db.get_user_duels_count(user_id)
-    await _in_executor(render_profile, user_title=user_title, avatar_path=avatar, stickers=_inv_to_render(paths, inv_items), out_path=out, duels_count=duels_count, lang=lang)
+    if not _render_cached(out, tuple(inv_items), duels_count, lang, avatar):
+        await _in_executor(render_profile, user_title=user_title, avatar_path=avatar, stickers=_inv_to_render(paths, inv_items), out_path=out, duels_count=duels_count, lang=lang)
     if len(inv_items) == 0:
         markup = kb_start(no_chips=True, lang=lang) if int(user.setup_done) == 0 else kb_no_chips(user.energy, lang=lang)
     else:
@@ -662,8 +681,8 @@ async def cb_duel_accept_go(cb: CallbackQuery, state: FSMContext, db: Database, 
     defender_gained = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in opponent_gained_units if u.file_id in paths]
 
     ts = int(time.time())
-    out_creator = os.path.join(os.getcwd(), "data", "renders", f"duel_result_{creator_id}_{cb.from_user.id}_{ts}_c.png")
-    out_op = os.path.join(os.getcwd(), "data", "renders", f"duel_result_{creator_id}_{cb.from_user.id}_{ts}_o.png")
+    out_creator = os.path.join(os.getcwd(), "data", "renders", f"duel_result_{creator_id}_{cb.from_user.id}_{ts}_c.webp")
+    out_op = os.path.join(os.getcwd(), "data", "renders", f"duel_result_{creator_id}_{cb.from_user.id}_{ts}_o.webp")
 
     creator_lang = await _user_lang(db, creator_id)
     await asyncio.gather(
@@ -734,7 +753,7 @@ async def _show_duel_offer(message: Message, *, duel_id: str, db: Database, bot:
         creator_avatar = await avatars.get_avatar_path(bot, creator_id)
     except Exception:
         pass
-    out = os.path.join(os.getcwd(), "data", "renders", f"duel_offer_{creator_id}_{duel_id}.png")
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_offer_{creator_id}_{duel_id}.webp")
     await _in_executor(
         render_battle_result,
         title="",
@@ -776,7 +795,7 @@ async def _send_duel_offer_to_user(user_id: int, *, duel_id: str, db: Database, 
         creator_avatar = await avatars.get_avatar_path(bot, creator_id)
     except Exception:
         pass
-    out = os.path.join(os.getcwd(), "data", "renders", f"duel_offer_{creator_id}_{duel_id}_{user_id}.png")
+    out = os.path.join(os.getcwd(), "data", "renders", f"duel_offer_{creator_id}_{duel_id}_{user_id}.webp")
     await _in_executor(
         render_battle_result,
         title="",
@@ -907,8 +926,9 @@ async def cb_play(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, 
     await state.set_state(BattlePick.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items])
     paths = await cache.get_paths_for_inv(bot, inv_items)
-    out = os.path.join(os.getcwd(), "data", "renders", f"battle_pick_{cb.from_user.id}.png")
-    await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    out = os.path.join(os.getcwd(), "data", "renders", f"battle_pick_{cb.from_user.id}.webp")
+    if not _render_cached(out, tuple(inv_items), lang):
+        await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
     if cb.message:
         try:
@@ -1030,7 +1050,7 @@ async def cb_battle_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
     paths = await cache.get_paths_for_ids(bot, set([u.file_id for u in result.player_won] + [u.file_id for u in result.enemy_won]))
     won = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in result.player_won if u.file_id in paths]
     lost = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in result.enemy_won if u.file_id in paths]
-    out = os.path.join(os.getcwd(), "data", "renders", f"battle_{cb.from_user.id}_{int(time.time())}.png")
+    out = os.path.join(os.getcwd(), "data", "renders", f"battle_{cb.from_user.id}_{int(time.time())}.webp")
     avatar = await avatars.get_avatar_path(bot, cb.from_user.id)
     await _in_executor(render_battle_result, title=t(lang, "battle_result_title"), user_title=_display_name(cb, lang), avatar_path=avatar, lost=lost, won=won, out_path=out, lang=lang)
     await state.clear()
@@ -1065,8 +1085,9 @@ async def cb_matchmaking(cb: CallbackQuery, state: FSMContext, db: Database, bot
     await state.set_state(MatchmakingPick.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items])
     paths = await cache.get_paths_for_inv(bot, inv_items)
-    out = os.path.join(os.getcwd(), "data", "renders", f"mm_pick_{cb.from_user.id}.png")
-    await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    out = os.path.join(os.getcwd(), "data", "renders", f"mm_pick_{cb.from_user.id}.webp")
+    if not _render_cached(out, tuple(inv_items), lang):
+        await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
     try:
         await cb.message.edit_media(media=InputMediaPhoto(media=pic, caption=t(lang, "collection")), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
@@ -1089,8 +1110,9 @@ async def cb_result_mm(cb: CallbackQuery, state: FSMContext, db: Database, bot: 
     await state.set_state(MatchmakingPick.picking)
     await state.update_data(picked={}, inv_order=[k for k, _ in inv_items])
     paths = await cache.get_paths_for_inv(bot, inv_items)
-    out = os.path.join(os.getcwd(), "data", "renders", f"mm_pick_{cb.from_user.id}.png")
-    await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    out = os.path.join(os.getcwd(), "data", "renders", f"mm_pick_{cb.from_user.id}.webp")
+    if not _render_cached(out, tuple(inv_items), lang):
+        await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
     _msg = await cb.message.answer_photo(pic, caption=t(lang, "collection"), reply_markup=kb_matchmaking_pick(inv_items, picked={}, lang=lang))
     _track(cb.from_user.id, _msg)
@@ -1224,7 +1246,7 @@ async def cb_mm_go(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot,
     defender_gained_r = [RenderSticker(file_id=u.file_id, path=paths[u.file_id], count=int(u.nominal)) for u in bot_gained if u.file_id in paths]
 
     ts = int(time.time())
-    out = os.path.join(os.getcwd(), "data", "renders", f"mm_result_{cb.from_user.id}_{ts}.png")
+    out = os.path.join(os.getcwd(), "data", "renders", f"mm_result_{cb.from_user.id}_{ts}.webp")
     avatar = await avatars.get_avatar_path(bot, cb.from_user.id)
     await _in_executor(
         render_duel_result,
@@ -1272,8 +1294,9 @@ async def cb_eu(cb: CallbackQuery, state: FSMContext, db: Database, bot: Bot, ca
     await state.set_state(EnergySpend.upgrade)
     await state.update_data(spend={}, inv_order=[k for k, _ in inv_items])
     paths = await cache.get_paths_for_inv(bot, inv_items)
-    out = os.path.join(os.getcwd(), "data", "renders", f"energy_upgrade_{cb.from_user.id}.png")
-    await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
+    out = os.path.join(os.getcwd(), "data", "renders", f"energy_upgrade_{cb.from_user.id}.webp")
+    if not _render_cached(out, tuple(inv_items), lang):
+        await _in_executor(render_profile, user_title=_display_name(cb, lang), avatar_path=None, stickers=_inv_to_render(paths, inv_items), out_path=out, lang=lang)
     pic = FSInputFile(out)
     if cb.message:
         try:
