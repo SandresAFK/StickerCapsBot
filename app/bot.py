@@ -113,13 +113,14 @@ async def _energy_reset_worker(*, bot: Bot, db: Database, cache: StickerCache, a
             user_ids = await db.get_all_user_ids()
             for uid in user_ids:
                 try:
-                    lang = await _user_lang(db, uid)
-                    _msg = await bot.send_message(
-                        chat_id=uid,
-                        text=t(lang, "energy_restored"),
-                    )
-                    _track(uid, _msg)
-                    await _send_profile_to_user(uid, bot=bot, db=db, cache=cache, avatars=avatars)
+                    # lang = await _user_lang(db, uid)
+                    # _msg = await bot.send_message(
+                    #     chat_id=uid,
+                    #     text=t(lang, "energy_restored"),
+                    # )
+                    # _track(uid, _msg)
+                    # await _send_profile_to_user(uid, bot=bot, db=db, cache=cache, avatars=avatars)
+                    pass
                 except Exception:
                     pass
         except Exception:
